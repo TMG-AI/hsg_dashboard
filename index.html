@@ -87,12 +87,13 @@
         }
         
         .stat-label {
-            color: #666;
-            font-size: 14px;
-            font-weight: 500;
-            margin-bottom: 8px;
+            color: #333;
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 16px;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
+            letter-spacing: 0.8px;
+            text-align: center;
         }
         
         .stat-value {
@@ -100,6 +101,13 @@
             font-weight: 700;
             color: #4a6741;
             margin: 0;
+            text-align: center;
+        }
+        
+        .stat-value.time {
+            color: #8bc34a;
+            font-size: 18px;
+            font-weight: 600;
         }
         
         .section-title {
@@ -400,7 +408,7 @@
             </div>
             <div class="stat-card">
                 <div class="stat-label">Last Updated</div>
-                <div class="stat-value" style="font-size: 16px; font-weight: 500;" id="last-updated">-</div>
+                <div class="stat-value time" id="last-updated">-</div>
             </div>
         </div>
         
@@ -475,12 +483,12 @@
             const uniqueSources = new Set(data.map(m => m.source));
             document.getElementById('active-sources').textContent = uniqueSources.size;
             
-            // Last Updated: Current timestamp
+            // Last Updated: Current timestamp with AM/PM
             const now = new Date();
             const timeString = now.toLocaleTimeString('en-US', { 
-                hour: '2-digit', 
+                hour: 'numeric', 
                 minute: '2-digit',
-                hour12: false 
+                hour12: true 
             });
             document.getElementById('last-updated').textContent = timeString;
         }

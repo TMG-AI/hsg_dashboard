@@ -9,15 +9,14 @@ from http.server import BaseHTTPRequestHandler
 from upstash_redis import Redis
 import time
 
-# --- FINAL FIX: Use the official Upstash library and configure it manually ---
+# --- FINAL, CORRECTED FIX: Use the Upstash library with the existing KV_... environment variables ---
 redis = Redis(
-    url=os.environ.get('UPSTASH_REDIS_REST_URL' ), 
-    token=os.environ.get('UPSTASH_REDIS_REST_TOKEN')
+    url=os.environ.get('KV_REST_API_URL' ), 
+    token=os.environ.get('KV_REST_API_TOKEN')
 )
 
 # --- CONFIGURATION ---
 SLACK_BOT_TOKEN = os.environ.get("SLACK_BOT_TOKEN")
-# ... (rest of the file is identical to before) ...
 SLACK_CHANNEL_NAME = "coinbase-intel"
 KEYWORDS_TO_TRACK = ["coinbase", "base", "usdc"]
 
@@ -58,7 +57,6 @@ class handler(BaseHTTPRequestHandler):
                                 "link": entry.link, "published": entry.get("published"), "type": "news"
                             }
                             
-                            # Save to database
                             redis.set(mention_id, json.dumps(mention_data))
                             redis.zadd('mentions', {mention_id: publish_timestamp})
 

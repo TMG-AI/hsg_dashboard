@@ -1,23 +1,27 @@
-import os 
+import os
 import feedparser
 import requests
 import hashlib
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 from http.server import BaseHTTPRequestHandler
-# --- FIX: Changed 'kv' to 'KV' ---
 from vercel_kv import KV
 import time
 
-# --- FIX: Create an instance of the KV class ---
-kv = KV( )
+# --- MANUAL FIX: Explicitly load credentials from environment variables ---
+kv = KV(
+    url=os.environ.get('KV_URL' ),
+    rest_api_url=os.environ.get('KV_REST_API_URL'),
+    rest_api_token=os.environ.get('KV_REST_API_TOKEN'),
+    rest_api_read_only_token=os.environ.get('KV_REST_API_READ_ONLY_TOKEN')
+)
 
 # --- CONFIGURATION ---
 SLACK_BOT_TOKEN = os.environ.get("SLACK_BOT_TOKEN")
+# ... (rest of the file is identical to before) ...
 SLACK_CHANNEL_NAME = "coinbase-intel"
-KEYWORDS_TO_TRACK = ["coinbase", "base", "usdc"] # Lowercase for easier matching
+KEYWORDS_TO_TRACK = ["coinbase", "base", "usdc"]
 
-# --- List of RSS Feeds to Monitor ---
 RSS_FEEDS = {
     "CoinDesk": "https://www.coindesk.com/arc/outboundfeeds/rss/",
     "The Block": "https://www.theblock.co/rss.xml",
@@ -39,7 +43,6 @@ def send_slack_notification(message):
     except SlackApiError as e:
         print(f"Error sending to Slack: {e.response['error']}")
 
-# --- Main handler function that Vercel will run ---
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
         print("--- Starting Scan ---")

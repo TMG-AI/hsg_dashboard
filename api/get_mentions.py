@@ -1,23 +1,25 @@
 from http.server import BaseHTTPRequestHandler
 import json
-# --- FIX: Changed 'kv' to 'KV' ---
+import os
 from vercel_kv import KV
 
-# --- FIX: Create an instance of the KV class ---
-kv = KV( )
+# --- MANUAL FIX: Explicitly load credentials from environment variables ---
+kv = KV(
+    url=os.environ.get('KV_URL' ),
+    rest_api_url=os.environ.get('KV_REST_API_URL'),
+    rest_api_token=os.environ.get('KV_REST_API_TOKEN'),
+    rest_api_read_only_token=os.environ.get('KV_REST_API_READ_ONLY_TOKEN')
+)
 
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
         try:
-            # Fetch the IDs of the latest 50 mentions from our sorted set, most recent first
             mention_ids = kv.zrange('mentions', 0, 49, desc=True)
             
             mentions = []
             if mention_ids:
-                # mget fetches multiple keys at once, which is efficient
                 mentions = kv.mget(*mention_ids)
             
-            # Filter out any potential null results if an item was deleted or expired
             mentions = [m for m in mentions if m is not None]
 
             self.send_response(200)

@@ -16,8 +16,7 @@ function toStringAny(v) {
 function normalizeUrl(u){
   try{
     const url=new URL(u); url.hash="";
-    ["utm_source","utm_medium","utm_campaign","utm_term","utm_content","utm_id","mc_cid","mc_eid","ref","fbclid","gclid","igshid"]
-      .forEach(p=>url.searchParams.delete(p));
+    ["utm_source","utm_medium","utm_campaign","utm_term","utm_content","utm_id","mc_cid","mc_eid","ref","fbclid","gclid","igshid"].forEach(p=>url.searchParams.delete(p));
     if ([...url.searchParams.keys()].length===0) url.search="";
     url.hostname = url.hostname.toLowerCase();
     let s = url.toString(); if (s.endsWith("/")) s=s.slice(0,-1);
@@ -27,11 +26,12 @@ function normalizeUrl(u){
 
 export default async function handler(req, res) {
   try {
-    const limit = Math.max(1, Math.min(500, parseInt(req.query.limit || "200", 10)));
+    const q = req.query || {};
+    const limit = Math.max(1, Math.min(1000, parseInt(q.limit || "200", 10)));
+    const sectionFilter = (q.section || "").trim(); // optional ?section=Top%20Crypto%20News
 
     // Newest first; members only
     const raw = await redis.zrange(ZSET, 0, limit - 1, { rev: true });
-
     const parsed = [];
     for (const row of raw || []) {
       if (looksLikeMention(row)) { parsed.push(row); continue; }
@@ -39,19 +39,20 @@ export default async function handler(req, res) {
       try { parsed.push(JSON.parse(s)); } catch {}
     }
 
-    // Distinct by canonical URL (canon if present, else normalized link)
+    // Distinct by canonical URL
     const seenCanon = new Set();
     const unique = [];
     for (const m of parsed) {
       const canon = m.canon || normalizeUrl(m.link || "");
-      if (!canon) { unique.push(m); continue; } // edge case
-      if (seenCanon.has(canon)) continue;
+      if (canon && seenCanon.has(canon)) continue;
       seenCanon.add(canon);
       unique.push(m);
     }
 
+    const filtered = sectionFilter ? unique.filter(m => (m.section || "Other") === sectionFilter) : unique;
+
     res.setHeader("Content-Type", "application/json; charset=utf-8");
-    res.status(200).send(JSON.stringify(unique));
+    res.status(200).send(JSON.stringify(filtered));
   } catch (e) {
     res.status(500).json({ ok: false, error: `get_mentions failed: ${e?.message || e}` });
   }

@@ -2,18 +2,17 @@ import os
 import feedparser
 import requests
 import hashlib
+import json
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 from http.server import BaseHTTPRequestHandler
-from vercel_kv import KV
+from upstash_redis import Redis
 import time
 
-# --- MANUAL FIX: Explicitly load credentials from environment variables ---
-kv = KV(
-    url=os.environ.get('KV_URL' ),
-    rest_api_url=os.environ.get('KV_REST_API_URL'),
-    rest_api_token=os.environ.get('KV_REST_API_TOKEN'),
-    rest_api_read_only_token=os.environ.get('KV_REST_API_READ_ONLY_TOKEN')
+# --- FINAL FIX: Use the official Upstash library and configure it manually ---
+redis = Redis(
+    url=os.environ.get('UPSTASH_REDIS_REST_URL' ), 
+    token=os.environ.get('UPSTASH_REDIS_REST_TOKEN')
 )
 
 # --- CONFIGURATION ---
@@ -26,18 +25,12 @@ RSS_FEEDS = {
     "CoinDesk": "https://www.coindesk.com/arc/outboundfeeds/rss/",
     "The Block": "https://www.theblock.co/rss.xml",
     "Cointelegraph": "https://cointelegraph.com/rss",
-    "Decrypt": "https://decrypt.co/feed",
-    "Blockworks": "https://blockworks.co/feed",
-    "TechCrunch Crypto": "https://techcrunch.com/category/cryptocurrency/feed/",
-    "Forbes Crypto": "https://www.forbes.com/crypto-blockchain/feed/",
 }
 
 slack_client = WebClient(token=SLACK_BOT_TOKEN )
 
 def send_slack_notification(message):
-    if not SLACK_BOT_TOKEN:
-        print("Slack Bot Token not set. Cannot send notification.")
-        return
+    if not SLACK_BOT_TOKEN: return
     try:
         slack_client.chat_postMessage(channel=SLACK_CHANNEL_NAME, text=message)
     except SlackApiError as e:
@@ -46,7 +39,6 @@ def send_slack_notification(message):
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
         print("--- Starting Scan ---")
-
         for name, url in RSS_FEEDS.items():
             try:
                 feed = feedparser.parse(url)
@@ -54,7 +46,7 @@ class handler(BaseHTTPRequestHandler):
                     if any(keyword in entry.title.lower() for keyword in KEYWORDS_TO_TRACK):
                         mention_id = hashlib.md5(entry.link.encode()).hexdigest()
                         
-                        if kv.get(mention_id) is None:
+                        if not redis.exists(mention_id):
                             print(f"New mention found: {entry.title}")
                             
                             publish_timestamp = time.time()
@@ -62,21 +54,16 @@ class handler(BaseHTTPRequestHandler):
                                 publish_timestamp = time.mktime(entry.published_parsed)
 
                             mention_data = {
-                                "id": mention_id,
-                                "source": name,
-                                "title": entry.title,
-                                "link": entry.link,
-                                "published": entry.get("published", time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(publish_timestamp))),
-                                "type": "news"
+                                "id": mention_id, "source": name, "title": entry.title,
+                                "link": entry.link, "published": entry.get("published"), "type": "news"
                             }
                             
-                            kv.set(mention_id, mention_data)
-                            kv.zadd('mentions', {mention_id: publish_timestamp})
+                            # Save to database
+                            redis.set(mention_id, json.dumps(mention_data))
+                            redis.zadd('mentions', {mention_id: publish_timestamp})
 
                             message = f"📰 *New Article Mention from {name}*\n>{entry.title}\n{entry.link}"
                             send_slack_notification(message)
-                        else:
-                            print(f"Duplicate mention skipped: {entry.title}")
             except Exception as e:
                 print(f"Error processing feed {name}: {e}")
 

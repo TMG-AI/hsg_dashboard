@@ -34,7 +34,6 @@ const SECTION_RULES = {
   "cryptopanic.com": "Aggregators",
   // Specialized / exchange blogs
   "bitcoinnews.com": "Specialized",
-  "wazirx.com": "Specialized"
 };
 
 function normalizeUrl(u) {
@@ -55,13 +54,28 @@ function hostOf(u) {
   try { return new URL(u).hostname.toLowerCase(); } catch { return ""; }
 }
 
+function normalizeHost(h) {
+  // collapse common subdomains so www.coindesk.com → coindesk.com
+  return (h || "")
+    .toLowerCase()
+    .replace(/^www\./, "")
+    .replace(/^amp\./, "");
+}
+
 function sectionFor(link, fallbackSourceTitle) {
-  const host = hostOf(link);
-  if (host && SECTION_RULES[host]) return SECTION_RULES[host];
-  // fallback simple heuristic
+  const raw = hostOf(link);
+  const host = normalizeHost(raw);
+
+  // Use SECTION_RULES; match exact host or any subdomain of a rule key
+  for (const [key, sec] of Object.entries(SECTION_RULES)) {
+    if (host === key || host.endsWith("." + key)) return sec;
+  }
+
+  // Fallback heuristic
   if ((fallbackSourceTitle || "").toLowerCase().includes("bitcoin")) return "Major Sources";
   return "Other";
 }
+
 
 function matchKeywords(text){ const t=(text||"").toLowerCase(); return KEYWORDS.filter(k=>t.includes(k)); }
 function isUrgent(m){ if(!URGENT.length) return false; const set=new Set(m.map(x=>x.toLowerCase())); return URGENT.some(u=>set.has(u)); }

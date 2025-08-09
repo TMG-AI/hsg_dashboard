@@ -1,4 +1,4 @@
-import os, feedparser, time, hashlib, json 
+import os, feedparser, time, hashlib, json
 from http.server import BaseHTTPRequestHandler
 from datetime import datetime
 from dateutil import parser as dtp
@@ -43,12 +43,9 @@ KEYWORDS = [k.strip().lower() for k in os.getenv("KEYWORDS", "").split(",") if k
 
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
-        print("\n--- COLLECTOR SCRIPT STARTED ---")
+        # --- FINAL ATTEMPT: Forcing a redeploy to clear any potential edge cache ---
+        print("\n--- COLLECTOR SCRIPT STARTED (Cache-Busting Version) ---")
         
-        # --- DIAGNOSTIC LOGGING ---
-        print(f"Found {len(RSS_FEEDS)} RSS Feeds.")
-        print(f"Found {len(KEYWORDS)} Keywords to track.")
-        print(f"Found {len(URGENT_KEYWORDS)} Urgent Keywords.")
         if not all([os.environ.get('KV_REST_API_URL'), os.environ.get('KV_REST_API_TOKEN')]):
             print("❌ FATAL: Missing Database Credentials. Exiting.")
             self.send_response(500); self.end_headers(); self.wfile.write(b"Server Error: Missing Database Credentials."); return

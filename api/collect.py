@@ -1,12 +1,42 @@
-import os, feedparser, time
+import os, feedparser, time, hashlib, json
 from http.server import BaseHTTPRequestHandler
 from datetime import datetime
 from dateutil import parser as dtp
-# --- UPDATE: Import the new email function ---
-from _shared import redis_client, get_mention_id, store_mention_data, send_email_alert
+from upstash_redis import Redis
+import resend
+
+# --- START: Code from _shared.py is now inside this file ---
+redis_client = Redis(
+    url=os.environ.get('KV_REST_API_URL' ), 
+    token=os.environ.get('KV_REST_API_TOKEN')
+)
+resend.api_key = os.environ.get("RESEND_API_KEY")
+DESTINATION_EMAIL = os.environ.get("DESTINATION_EMAIL")
+
+def get_mention_id(link: str) -> str:
+    return hashlib.sha256(link.encode("utf-8")).hexdigest()
+
+def store_mention_data(mention_id: str, data: dict):
+    score = data.get("published_ts", int(time.time()))
+    redis_client.set(mention_id, json.dumps(data))
+    redis_client.zadd('mentions_sorted_set', {mention_id: score})
+
+def send_email_alert(data: dict):
+    if not resend.api_key or not DESTINATION_EMAIL:
+        print("Resend API Key or Destination Email not set.")
+        return
+    try:
+        subject = f"New Coinbase Mention: {data.get('source')}"
+        html_body = f"""<h3><a href='{data.get("link")}'>{data.get("title")}</a></h3><p><strong>Source:</strong> {data.get('source')}</p><p><strong>Published:</strong> {data.get('published')}</p>"""
+        params = {"from": "PR Alerter <onboarding@resend.dev>", "to": [DESTINATION_EMAIL], "subject": subject, "html": html_body}
+        resend.Emails.send(params)
+        print(f"Email alert sent for: {data.get('title')}")
+    except Exception as e:
+        print(f"Email alert failed: {e}")
+# --- END: Code from _shared.py ---
 
 # --- Configuration from Environment Variables ---
-RSS_FEEDS = [u.strip( ) for u in os.getenv("RSS_FEEDS", "").split(",") if u.strip()]
+RSS_FEEDS = [u.strip() for u in os.getenv("RSS_FEEDS", "").split(",") if u.strip()]
 KEYWORDS = [k.strip().lower() for k in os.getenv("KEYWORDS", "").split(",") if k.strip()]
 
 class handler(BaseHTTPRequestHandler):
@@ -36,7 +66,6 @@ class handler(BaseHTTPRequestHandler):
                                 "published_ts": published_ts
                             }
                             store_mention_data(mention_id, mention_data)
-                            # --- UPDATE: Call the new email function ---
                             send_email_alert(mention_data)
             except Exception as e:
                 print(f"Failed to process feed {url}: {e}")

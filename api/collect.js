@@ -243,8 +243,16 @@ export default async function handler(req, res) {
         const link = extractItemLink(e);
 
         // Include feed title in the context to catch official channels (Coinbase, Base)
-        const matched = matchKeywords(`${title}\n${sum}\n${feedTitle}\n${link}`);
-        if (!matched.length) continue;
+        let matched = matchKeywords(`${title}\n${sum}\n${feedTitle}\n${link}`);
+
+// If it's YouTube AND the channel looks official, force a match
+const isYT = /youtube\.com|youtu\.be/.test((new URL(link)).hostname);
+const isOfficialYT = isYT && /coinbase|^base\b|build on base/i.test(feedTitle || "");
+if (!matched.length && isOfficialYT) matched = ["coinbase"];
+
+// Still skip if no match at all
+if (!matched.length) continue;
+
 
         const canon = normalizeUrl(link || title);
         if (!canon) continue;

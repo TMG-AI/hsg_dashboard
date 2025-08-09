@@ -5,11 +5,15 @@ import hashlib
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 from http.server import BaseHTTPRequestHandler
-from vercel_kv import kv
+# --- FIX: Changed 'kv' to 'KV' ---
+from vercel_kv import KV
 import time
 
+# --- FIX: Create an instance of the KV class ---
+kv = KV( )
+
 # --- CONFIGURATION ---
-SLACK_BOT_TOKEN = os.environ.get("SLACK_BOT_TOKEN" )
+SLACK_BOT_TOKEN = os.environ.get("SLACK_BOT_TOKEN")
 SLACK_CHANNEL_NAME = "coinbase-intel"
 KEYWORDS_TO_TRACK = ["coinbase", "base", "usdc"] # Lowercase for easier matching
 
@@ -50,7 +54,6 @@ class handler(BaseHTTPRequestHandler):
                         if kv.get(mention_id) is None:
                             print(f"New mention found: {entry.title}")
                             
-                            # Use current time as a score for sorting if published date is missing
                             publish_timestamp = time.time()
                             if hasattr(entry, 'published_parsed') and entry.published_parsed is not None:
                                 publish_timestamp = time.mktime(entry.published_parsed)
@@ -64,11 +67,9 @@ class handler(BaseHTTPRequestHandler):
                                 "type": "news"
                             }
                             
-                            # Save to database
                             kv.set(mention_id, mention_data)
                             kv.zadd('mentions', {mention_id: publish_timestamp})
 
-                            # Send Slack Alert
                             message = f"📰 *New Article Mention from {name}*\n>{entry.title}\n{entry.link}"
                             send_slack_notification(message)
                         else:

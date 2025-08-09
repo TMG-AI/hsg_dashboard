@@ -1,8 +1,11 @@
 import { Redis } from "@upstash/redis";
 import Parser from "rss-parser";
-import { Resend } from "@resend/node";
+import { Resend } from "resend";
 
-const redis = new Redis({ url: process.env.KV_REST_API_URL, token: process.env.KV_REST_API_TOKEN });
+const redis = new Redis({
+  url: process.env.KV_REST_API_URL,
+  token: process.env.KV_REST_API_TOKEN
+});
 const parser = new Parser();
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
@@ -53,7 +56,7 @@ export default async function handler(req, res) {
         if (!matched.length) continue;
 
         const mid = mentionId(link, title);
-        const added = await redis.sadd(SEEN, mid);  // 1=new, 0=seen
+        const added = await redis.sadd(SEEN, mid);  // 1 = new, 0 = seen
         if (added !== 1) continue;
 
         const ts = toEpoch(e.isoDate || e.pubDate || e.published || e.updated);

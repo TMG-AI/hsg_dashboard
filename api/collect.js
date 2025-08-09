@@ -34,6 +34,9 @@ const SECTION_RULES = {
   "cryptopanic.com": "Aggregators",
   // Specialized / exchange blogs
   "bitcoinnews.com": "Specialized",
+  // Social / video
+  "youtube.com": "Social Media",
+  "youtu.be": "Social Media"
 };
 
 // ---------- helpers ----------
@@ -95,6 +98,46 @@ function displaySource(link, fallback) {
   return h || (fallback || "");
 }
 
+// ---------- YouTube helpers ----------
+function buildYouTubeWatchUrl(maybeIdOrUrl) {
+  const s = (maybeIdOrUrl || "").trim();
+  // If it's already a URL, return as-is
+  if (/^https?:\/\//i.test(s)) return s;
+  // If it looks like a video ID, build a URL
+  if (/^[A-Za-z0-9_-]{11}$/.test(s)) return `https://www.youtube.com/watch?v=${s}`;
+  return s;
+}
+
+/**
+ * Extract a robust link from an rss-parser item that may be RSS or Atom:
+ * - e.link may be string OR object { href } OR array
+ * - e.links may be an array of { href }
+ * - YouTube feeds sometimes only expose ID (yt:videoId or id like yt:video:ID)
+ */
+function extractItemLink(e) {
+  // 1) Standard locations
+  let raw =
+    (e.link && typeof e.link === "object" && e.link.href) ? e.link.href :
+    (Array.isArray(e.link) && e.link[0]?.href)            ? e.link[0].href :
+    (e.links && e.links[0]?.href)                         ? e.links[0].href :
+    (typeof e.link === "string" ? e.link : "") ||
+    (typeof e.id === "string" ? e.id : ""); // last-ditch fallback (Atom id)
+
+  // 2) Unwrap Google Alerts redirect if present
+  raw = unwrapGoogleAlert(raw);
+
+  // 3) YouTube handling
+  // Try common custom fields from rss-parser (if present)
+  const ytId = e["yt:videoId"] || e.videoId || (typeof e.id === "string" && e.id.startsWith("yt:video:") ? e.id.split("yt:video:")[1] : "");
+  if (!/^https?:\/\//i.test(raw) && ytId) {
+    raw = buildYouTubeWatchUrl(ytId);
+  } else if (hostOf(raw).includes("youtube.com") || hostOf(raw).includes("youtu.be")) {
+    raw = buildYouTubeWatchUrl(raw);
+  }
+
+  return (raw || "").trim();
+}
+
 function matchKeywords(text){ const t=(text||"").toLowerCase(); return KEYWORDS.filter(k=>t.includes(k)); }
 function isUrgent(m){ if(!URGENT.length) return false; const set=new Set(m.map(x=>x.toLowerCase())); return URGENT.some(u=>set.has(u)); }
 function idFromCanonical(canon) { let h=0; for (let i=0;i<canon.length;i++) h=(h*31+canon.charCodeAt(i))>>>0; return `m_${h.toString(16)}`; }
@@ -142,15 +185,9 @@ export default async function handler(req, res) {
 
       for (const e of feed?.items || []) {
         const title = (e.title||"").trim();
-        // Google Alerts / Atom feeds often place URL in link.href or links[0].href
-const rawLink =
-  (e.link && typeof e.link === "object" && e.link.href) ? e.link.href :
-  (Array.isArray(e.link) && e.link[0]?.href)            ? e.link[0].href :
-  (e.links && e.links[0]?.href)                         ? e.links[0].href :
-  (typeof e.link === "string" ? e.link : "") ||
-  (typeof e.id === "string" ? e.id : ""); // last-ditch fallback
 
-const link = unwrapGoogleAlert((rawLink || "").trim());
+        // Robust link extraction (Google Alerts + Atom + YouTube)
+        const link = extractItemLink(e);
 
         const sum   = e.contentSnippet || e.content || e.summary || "";
         const matched = matchKeywords(`${title}\n${sum}\n${link}`);

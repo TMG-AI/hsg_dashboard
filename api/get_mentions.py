@@ -1,65 +1,37 @@
-# api/get_mentions.py
-import os, json, ast, traceback
+import os, json
+from urllib.parse import urlparse, parse_qs
+from http.server import BaseHTTPRequestHandler
 from upstash_redis import Redis
 
-# Initialize once (fail-safe)
-REDIS_URL  = os.getenv("KV_REST_API_URL")
-REDIS_TOKEN= os.getenv("KV_REST_API_TOKEN")
-ZSET       = "mentions:z"
+REDIS = Redis(url=os.getenv("KV_REST_API_URL"), token=os.getenv("KV_REST_API_TOKEN"))
+ZSET  = "mentions:z"
 
-def _safe_parse(item: str):
-    """Parse JSON first; if that fails, try legacy str(dict) via ast.literal_eval."""
-    if item is None:
-        return None
-    if isinstance(item, (bytes, bytearray)):
-        item = item.decode("utf-8", errors="ignore")
-    # JSON path
-    try:
-        return json.loads(item)
-    except Exception:
-        pass
-    # Legacy str(dict)
-    try:
-        v = ast.literal_eval(item)
-        return v if isinstance(v, dict) else None
-    except Exception:
-        return None
+def _json(self, obj, status=200):
+    data = json.dumps(obj, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    self.send_response(status)
+    self.send_header("Content-Type", "application/json; charset=utf-8")
+    self.send_header("Content-Length", str(len(data)))
+    self.end_headers()
+    self.wfile.write(data)
 
-def handler(request):
-    # Basic env checks with explicit 500 explanation instead of stack trace
-    if not REDIS_URL or not REDIS_TOKEN:
-        return ({"ok": False, "error": "Missing KV_REST_API_URL or KV_REST_API_TOKEN"}, 500)
+class handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        try:
+            qs = parse_qs(urlparse(self.path).query)
+            try:
+                limit = int(qs.get("limit", ["200"])[0]); limit = max(1, min(500, limit))
+            except Exception:
+                limit = 200
 
-    try:
-        r = Redis(url=REDIS_URL, token=REDIS_TOKEN)
-    except Exception as e:
-        return ({"ok": False, "error": f"Redis init failed: {type(e).__name__}: {e}"}, 500)
-
-    # limit handling
-    limit = 200
-    try:
-        qs = request.args or {}
-        if "limit" in qs:
-            limit = max(1, min(500, int(qs.get("limit"))))
-    except Exception:
-        pass
-
-    try:
-        raw = r.zrevrange(ZSET, 0, limit - 1) or []
-        out = []
-        for s in raw:
-            parsed = _safe_parse(s)
-            if parsed and isinstance(parsed, dict):
-                out.append(parsed)
-        # Return a bare array (your frontend expects this)
-        return (out, 200)
-    except Exception as e:
-        # Never 500 silently—surface a compact diagnostic payload
-        return (
-            {
-                "ok": False,
-                "error": f"Unhandled in get_mentions: {type(e).__name__}: {e}",
-                "hint": "If you recently changed storage format, some legacy records may be malformed.",
-            },
-            500,
-        )
+            raw = REDIS.zrevrange(ZSET, 0, limit - 1) or []
+            out = []
+            for s in raw:
+                if isinstance(s, (bytes, bytearray)):
+                    s = s.decode("utf-8", errors="ignore")
+                try:
+                    out.append(json.loads(s))
+                except Exception:
+                    continue
+            _json(self, out, 200)
+        except Exception as e:
+            _json(self, {"ok": False, "error": f"get_mentions failed: {type(e).__name__}: {e}"}, 500)

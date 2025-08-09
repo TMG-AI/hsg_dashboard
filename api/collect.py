@@ -1,118 +1,110 @@
-# api/collect.py
 import os, time, json
 from datetime import datetime
 from typing import List, Dict
+from http.server import BaseHTTPRequestHandler
 import feedparser
 from dateutil import parser as dtp
 from upstash_redis import Redis
 from resend import Emails
 
-# ---- Config ----
 REDIS = Redis(url=os.getenv("KV_REST_API_URL"), token=os.getenv("KV_REST_API_TOKEN"))
 RSS_FEEDS: List[str] = [u.strip() for u in (os.getenv("RSS_FEEDS") or "").split(",") if u.strip()]
-KEYWORDS: List[str]  = [k.strip().lower() for k in (os.getenv("KEYWORDS") or "").split(",") if k.strip()]
-URGENT: List[str]    = [k.strip().lower() for k in (os.getenv("ALERT_KEYWORDS_URGENT") or "").split(",") if k.strip()]
+KEYWORDS:  List[str] = [k.strip().lower() for k in (os.getenv("KEYWORDS") or "").split(",") if k.strip()]
+URGENT:    List[str] = [k.strip().lower() for k in (os.getenv("ALERT_KEYWORDS_URGENT") or "").split(",") if k.strip()]
 
-ZSET_MENTIONS = "mentions:z"       # score = published_ts
-SET_SEEN      = "mentions:seen"    # SADD de-dupe set
-MAX_MENTIONS  = 5000
+ZSET = "mentions:z"
+SEEN = "mentions:seen"
+MAX_MENTIONS = 5000
 
-RESEND_API_KEY     = os.getenv("RESEND_API_KEY")
-ALERT_EMAIL_FROM   = os.getenv("ALERT_EMAIL_FROM")
-ALERT_EMAIL_TO     = [e.strip() for e in (os.getenv("ALERT_EMAIL_TO") or "").split(",") if e.strip()]
+RESEND_API_KEY   = os.getenv("RESEND_API_KEY")
+ALERT_EMAIL_FROM = os.getenv("ALERT_EMAIL_FROM")
+ALERT_EMAIL_TO   = [e.strip() for e in (os.getenv("ALERT_EMAIL_TO") or "").split(",") if e.strip()]
 
-def _now() -> int:
-    return int(time.time())
+def _json(self, obj, status=200):
+    data = json.dumps(obj, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    self.send_response(status)
+    self.send_header("Content-Type", "application/json; charset=utf-8")
+    self.send_header("Content-Length", str(len(data)))
+    self.end_headers()
+    self.wfile.write(data)
 
-def _pub_ts(entry) -> int:
+def _now() -> int: return int(time.time())
+
+def _pub_ts(e) -> int:
     for field in ("published", "updated", "pubDate"):
-        v = getattr(entry, field, None) or entry.get(field)
+        v = getattr(e, field, None) or e.get(field)
         if v:
             try: return int(dtp.parse(v).timestamp())
             except Exception: pass
     return _now()
 
-def _match(text: str) -> List[str]:
-    t = (text or "").lower()
+def _match(t: str) -> List[str]:
+    t = (t or "").lower()
     return [k for k in KEYWORDS if k in t]
 
 def _urgent(matched: List[str]) -> bool:
-    if not URGENT: return False
-    s = set(matched)
-    return any(u in s for u in URGENT)
+    return bool(set(matched) & set(URGENT)) if URGENT else False
 
-def _mention_id(link: str, title: str) -> str:
-    # link preferred; fall back to title+ts to avoid accidental collisions
+def _id(link: str, title: str) -> str:
     from hashlib import sha256
-    payload = (link or "").encode("utf-8") if link else f"{title}|{_now()}".encode("utf-8")
-    return sha256(payload).hexdigest()
+    return sha256((link or title or "").encode("utf-8")).hexdigest()
 
-def _store(mention: Dict):
-    # store JSON in ZSET; trim window
-    REDIS.zadd(ZSET_MENTIONS, {json.dumps(mention, separators=(",",":")): mention["published_ts"]})
-    REDIS.zremrangebyrank(ZSET_MENTIONS, 0, -MAX_MENTIONS-1)
+def _store(m: Dict):
+    REDIS.zadd(ZSET, {json.dumps(m, separators=(",", ":")): m["published_ts"]})
+    REDIS.zremrangebyrank(ZSET, 0, -MAX_MENTIONS-1)
 
-def _send_email(mention: Dict):
+def _email(m: Dict):
     if not (RESEND_API_KEY and ALERT_EMAIL_FROM and ALERT_EMAIL_TO): return
     Emails.api_key = RESEND_API_KEY
-    subject = f"[URGENT] {mention['title']}"
-    body = (
-        f"<p><b>{mention['title']}</b></p>"
-        f"<p>Source: {mention['source']} &middot; Published: {mention['published']}</p>"
-        f"<p>Keywords: {', '.join(mention['matched'])}</p>"
-        f"<p><a href='{mention['link']}'>Open article</a></p>"
-    )
     Emails.send({
         "from": ALERT_EMAIL_FROM,
         "to": ALERT_EMAIL_TO,
-        "subject": subject,
-        "html": body
+        "subject": f"[URGENT] {m['title']}",
+        "html": (
+            f"<p><b>{m['title']}</b></p>"
+            f"<p>Source: {m['source']} · {m['published']}</p>"
+            f"<p>Keywords: {', '.join(m['matched'])}</p>"
+            f"<p><a href='{m['link']}'>Open</a></p>"
+        )
     })
 
-def handler(request):
-    if not (RSS_FEEDS and KEYWORDS):
-        return ({"ok": False, "error": "Missing RSS_FEEDS or KEYWORDS"}, 400)
+class handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        try:
+            if not (RSS_FEEDS and KEYWORDS):
+                _json(self, {"ok": False, "error": "Missing RSS_FEEDS or KEYWORDS"}, 400); return
 
-    found = 0
-    stored = 0
-    emailed = 0
+            found = stored = emailed = 0
 
-    for url in RSS_FEEDS:
-        feed = feedparser.parse(url)
-        source = (feed.feed.get("title") or url) if getattr(feed, "feed", None) else url
+            for url in RSS_FEEDS:
+                feed = feedparser.parse(url)
+                source = (getattr(feed, "feed", {}) or {}).get("title") or url
 
-        for e in getattr(feed, "entries", []):
-            title = e.get("title", "").strip()
-            link  = e.get("link", "").strip()
-            text  = f"{title}\n{e.get('summary','')}\n{link}"
-            matched = _match(text)
-            if not matched:
-                continue
+                for e in getattr(feed, "entries", []):
+                    title = (e.get("title") or "").strip()
+                    link  = (e.get("link")  or "").strip()
+                    matched = _match(f"{title}\n{e.get('summary','')}\n{link}")
+                    if not matched: continue
 
-            mid = _mention_id(link, title)
+                    mid = _id(link, title)
+                    if REDIS.sadd(SEEN, mid) != 1:  # 1=new, 0=seen
+                        continue
 
-            # ATOMIC DE-DUPE: SADD returns 1 if new, 0 if exists
-            added = REDIS.sadd(SET_SEEN, mid)
-            if added != 1:
-                # already seen, skip
-                continue
+                    ts = _pub_ts(e)
+                    m = {
+                        "id": mid,
+                        "title": title or "(untitled)",
+                        "link": link,
+                        "source": source,
+                        "matched": matched,
+                        "published_ts": ts,
+                        "published": datetime.utcfromtimestamp(ts).isoformat() + "Z"
+                    }
+                    _store(m)
+                    stored += 1
+                    if _urgent(matched): _email(m); emailed += 1
+                    found += 1
 
-            published_ts = _pub_ts(e)
-            mention = {
-                "id": mid,
-                "title": title or "(untitled)",
-                "link": link,
-                "source": source,
-                "matched": matched,
-                "published_ts": published_ts,
-                "published": datetime.utcfromtimestamp(published_ts).isoformat() + "Z"
-            }
-            _store(mention)
-            stored += 1
-            if _urgent(matched):
-                _send_email(mention)
-                emailed += 1
-
-            found += 1
-
-    return ({"ok": True, "feeds": len(RSS_FEEDS), "found": found, "stored": stored, "emailed": emailed}, 200)
+            _json(self, {"ok": True, "feeds": len(RSS_FEEDS), "found": found, "stored": stored, "emailed": emailed}, 200)
+        except Exception as e:
+            _json(self, {"ok": False, "error": f"collect failed: {type(e).__name__}: {e}"}, 500)

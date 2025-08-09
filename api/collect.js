@@ -142,8 +142,16 @@ export default async function handler(req, res) {
 
       for (const e of feed?.items || []) {
         const title = (e.title||"").trim();
-        const rawLink = (e.link ||"").trim();
-        const link  = unwrapGoogleAlert(rawLink);
+        // Google Alerts / Atom feeds often place URL in link.href or links[0].href
+const rawLink =
+  (e.link && typeof e.link === "object" && e.link.href) ? e.link.href :
+  (Array.isArray(e.link) && e.link[0]?.href)            ? e.link[0].href :
+  (e.links && e.links[0]?.href)                         ? e.links[0].href :
+  (typeof e.link === "string" ? e.link : "") ||
+  (typeof e.id === "string" ? e.id : ""); // last-ditch fallback
+
+const link = unwrapGoogleAlert((rawLink || "").trim());
+
         const sum   = e.contentSnippet || e.content || e.summary || "";
         const matched = matchKeywords(`${title}\n${sum}\n${link}`);
         if (!matched.length) continue;

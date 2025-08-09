@@ -16,36 +16,32 @@ function toStringAny(v) {
   if (typeof v === "string") return v;
   if (Buffer.isBuffer(v))   return v.toString("utf-8");
   if (v == null)            return "";
-  return String(v);
-}
-
-// Accepts: strings, Buffers, {member, score}, or direct objects
-function normalizeAndParse(items) {
-  const out = [];
-  for (const row of items || []) {
-    // Case 1: SDK returns {member, score}
-    if (row && typeof row === "object" && "member" in row) {
-      const m = row.member;
-      if (looksLikeMention(m)) { out.push(m); continue; }
-      const s = toStringAny(m);
-      try { out.push(JSON.parse(s)); } catch {}
-      continue;
-    }
-    // Case 2: SDK returns direct object as member
-    if (looksLikeMention(row)) { out.push(row); continue; }
-    // Case 3: plain string/buffer
-    const s = toStringAny(row);
-    try { out.push(JSON.parse(s)); } catch {}
-  }
-  return out;
+  return JSON.stringify(v); // last resort for objects
 }
 
 export default async function handler(req, res) {
   try {
     const limit = Math.max(1, Math.min(500, parseInt(req.query.limit || "200", 10)));
-    // Newest-first
-    const raw = await redis.zrange(ZSET, 0, limit - 1, { rev: true, withScores: true });
-    const out = normalizeAndParse(raw);
+
+    // Newest-first; DO NOT request scores (avoids pair/tuple formats)
+    const raw = await redis.zrange(ZSET, 0, limit - 1, { rev: true });
+
+    const out = [];
+    for (const row of raw || []) {
+      // Case A: SDK already returned the member as an object
+      if (looksLikeMention(row)) { out.push(row); continue; }
+
+      // Case B: Member is an object wrapper (rare) — stringify then parse
+      if (row && typeof row === "object" && !Buffer.isBuffer(row)) {
+        try { out.push(JSON.parse(JSON.stringify(row))); } catch {}
+        continue;
+      }
+
+      // Case C: String / Buffer JSON
+      const s = toStringAny(row);
+      try { out.push(JSON.parse(s)); } catch {}
+    }
+
     res.setHeader("Content-Type", "application/json; charset=utf-8");
     res.status(200).send(JSON.stringify(out));
   } catch (e) {

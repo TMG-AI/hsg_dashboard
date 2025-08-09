@@ -67,6 +67,8 @@ class handler(BaseHTTPRequestHandler):
                             }
                             store_mention_data(mention_id, mention_data)
                             send_email_alert(mention_data)
+                            # --- FINAL FIX: Add a small delay to respect the rate limit ---
+                            time.sleep(0.6) # Sleep for 600ms, allowing less than 2 requests/sec
             except Exception as e:
                 print(f"Failed to process feed {url}: {e}")
 

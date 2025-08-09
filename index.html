@@ -1,50 +1,588 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>PR Monitor</title>
-  <style>
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;margin:0;background:#f7f9fc}
-    header{background:#0A2540;color:#fff;padding:14px 18px}
-    .wrap{max-width:960px;margin:0 auto;padding:18px}
-    .card{background:#fff;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,.06);padding:14px 16px;margin:12px 0}
-    .meta{color:#555;font-size:12px}
-    .chip{background:#eef2f7;border-radius:10px;padding:3px 8px;margin-right:6px;font-size:12px;display:inline-block}
-    a{color:#0A2540;text-decoration:none}
-    #err{color:#b00020;margin:8px 0}
-  </style>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width,initial-scale=1"/>
+    <title>Coinbase Monitoring Dashboard</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            background: linear-gradient(135deg, #f8fffe 0%, #f1f8f6 100%);
+            min-height: 100vh;
+            color: #1a1a1a;
+        }
+        
+        header {
+            background: linear-gradient(135deg, #4a6741 0%, #5a7c50 100%);
+            color: #fff;
+            padding: 24px 32px;
+            box-shadow: 0 4px 20px rgba(74, 103, 65, 0.15);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M 10 0 L 0 0 0 10" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="0.5"/></pattern></defs><rect width="100" height="100" fill="url(%23grid)"/></svg>');
+            pointer-events: none;
+        }
+        
+        .header-content {
+            position: relative;
+            z-index: 1;
+        }
+        
+
+        
+        .header-title {
+            margin: 0;
+            font-size: 28px;
+            font-weight: 600;
+            letter-spacing: -0.02em;
+        }
+        
+        .header-subtitle {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 14px;
+            margin: 4px 0 0 0;
+            font-weight: 400;
+        }
+        
+        .wrap {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 32px 24px;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 20px;
+            margin-bottom: 32px;
+        }
+        
+        .stat-card {
+            background: #fff;
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            border: 1px solid rgba(139, 195, 74, 0.2);
+            transition: all 0.3s ease;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+            border-color: rgba(139, 195, 74, 0.4);
+        }
+        
+        .stat-label {
+            color: #666;
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .stat-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: #4a6741;
+            margin: 0;
+        }
+        
+        .section-title {
+            font-size: 24px;
+            font-weight: 600;
+            color: #1a1a1a;
+            margin: 0 0 24px 0;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .section-title::before {
+            content: '';
+            width: 4px;
+            height: 24px;
+            background: linear-gradient(135deg, #8bc34a, #7cb342);
+            border-radius: 2px;
+        }
+        
+        .articles-container {
+            display: grid;
+            gap: 20px;
+        }
+        
+        .card {
+            background: #fff;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            padding: 0;
+            border: 1px solid rgba(139, 195, 74, 0.2);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+            opacity: 0;
+            transform: translateY(20px);
+            animation: slideIn 0.5s ease forwards;
+        }
+        
+        @keyframes slideIn {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: linear-gradient(90deg, #8bc34a, #7cb342);
+        }
+        
+        .card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+            border-color: rgba(139, 195, 74, 0.4);
+        }
+        
+        .card-content {
+            padding: 24px;
+        }
+        
+        .card-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1a1a1a;
+            margin: 0 0 12px 0;
+            line-height: 1.4;
+        }
+        
+        .card-title a {
+            color: inherit;
+            text-decoration: none;
+            transition: color 0.3s ease;
+        }
+        
+        .card-title a:hover {
+            color: #4a6741;
+        }
+        
+        .meta {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        
+        .meta-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 12px;
+            background: rgba(139, 195, 74, 0.1);
+            border-radius: 8px;
+            font-size: 14px;
+            color: #666;
+            font-weight: 500;
+        }
+        
+        .meta-icon {
+            width: 14px;
+            height: 14px;
+            opacity: 0.7;
+        }
+        
+        .chip {
+            background: linear-gradient(135deg, rgba(139, 195, 74, 0.15), rgba(139, 195, 74, 0.25));
+            border: 1px solid rgba(139, 195, 74, 0.3);
+            border-radius: 12px;
+            padding: 6px 12px;
+            margin: 4px 6px 4px 0;
+            font-size: 12px;
+            font-weight: 500;
+            display: inline-block;
+            color: #4a6741;
+            transition: all 0.3s ease;
+        }
+        
+        .chip:hover {
+            background: linear-gradient(135deg, rgba(139, 195, 74, 0.25), rgba(139, 195, 74, 0.35));
+            transform: scale(1.05);
+        }
+        
+        .chip-container {
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid rgba(139, 195, 74, 0.2);
+        }
+        
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            color: #666;
+        }
+        
+        .loading::before {
+            content: '';
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(139, 195, 74, 0.3);
+            border-top: 2px solid #8bc34a;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 12px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        #err {
+            background: linear-gradient(135deg, #ffebee, #fce4ec);
+            border: 1px solid #ffcdd2;
+            color: #d32f2f;
+            padding: 16px 20px;
+            border-radius: 12px;
+            margin: 16px 0;
+            font-weight: 500;
+            display: none;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #666;
+            background: #fff;
+            border-radius: 16px;
+            border: 1px solid rgba(139, 195, 74, 0.2);
+        }
+        
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+        
+        .refresh-btn {
+            background: linear-gradient(135deg, #8bc34a, #7cb342);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 16px;
+        }
+        
+        .refresh-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(139, 195, 74, 0.3);
+        }
+        
+        .card-loading {
+            background: #fff;
+            border-radius: 16px;
+            padding: 24px;
+            margin: 16px 0;
+            border: 1px solid rgba(139, 195, 74, 0.2);
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        
+        .skeleton {
+            background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+            background-size: 200% 100%;
+            animation: loading 1.5s infinite;
+            border-radius: 4px;
+        }
+        
+        @keyframes loading {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+        
+        .skeleton-title {
+            height: 20px;
+            margin-bottom: 12px;
+            width: 75%;
+        }
+        
+        .skeleton-meta {
+            height: 14px;
+            margin-bottom: 8px;
+            width: 40%;
+        }
+        
+        .skeleton-chip {
+            height: 24px;
+            width: 60px;
+            display: inline-block;
+            margin-right: 8px;
+        }
+        
+        @media (max-width: 768px) {
+            .header-content {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 12px;
+            }
+            
+            .wrap {
+                padding: 20px 16px;
+            }
+            
+            .stats-grid {
+                grid-template-columns: 1fr;
+                gap: 16px;
+            }
+            
+            .card-content {
+                padding: 20px;
+            }
+            
+            .meta {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 8px;
+            }
+        }
+    </style>
 </head>
 <body>
-<header><h1>PR Monitor</h1></header>
-<div class="wrap">
-  <div id="err" style="display:none"></div>
-  <div id="list"></div>
-</div>
-<script>
-(async () => {
-  try {
-    const r = await fetch('/api/get_mentions?limit=50');
-    if (!r.ok) throw new Error('HTTP '+r.status);
-    const data = await r.json();
-    const list = document.getElementById('list');
-    list.innerHTML = '';
-    for (const m of data) {
-      const div = document.createElement('div');
-      div.className = 'card';
-      div.innerHTML = `
-        <div><a href="${m.link}" target="_blank" rel="noopener">${m.title}</a></div>
-        <div class="meta">${m.source} · ${new Date(m.published).toLocaleString()}</div>
-        <div style="margin-top:6px;">${(m.matched||[]).map(k=>`<span class="chip">${k}</span>`).join('')}</div>`;
-      list.appendChild(div);
-    }
-    if (!data.length) document.getElementById('err').style.display='block',
-      document.getElementById('err').textContent='No mentions yet. Run /api/collect once.';
-  } catch (e) {
-    const el = document.getElementById('err');
-    el.style.display='block'; el.textContent = 'Could not load mentions. '+e.message;
-  }
-})();
-</script>
+    <header>
+        <div class="header-content">
+            <h1 class="header-title">Coinbase Monitoring Dashboard</h1>
+            <p class="header-subtitle">Real-time cryptocurrency mention tracking</p>
+        </div>
+    </header>
+    
+    <div class="wrap">
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-label">Total Mentions</div>
+                <div class="stat-value" id="total-mentions">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Today's Activity</div>
+                <div class="stat-value" id="today-mentions">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Active Sources</div>
+                <div class="stat-value" id="active-sources">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Last Updated</div>
+                <div class="stat-value" style="font-size: 16px; font-weight: 500;" id="last-updated">-</div>
+            </div>
+        </div>
+        
+        <div id="err"></div>
+        
+        <h2 class="section-title">Recent Mentions</h2>
+        
+        <div id="loading" class="loading" style="display: none;">
+            Loading mentions...
+        </div>
+        
+        <div id="list" class="articles-container"></div>
+    </div>
+
+    <script>
+        let loadingSkeletons = [];
+        
+        function createLoadingSkeleton() {
+            const div = document.createElement('div');
+            div.className = 'card-loading';
+            div.innerHTML = `
+                <div class="skeleton skeleton-title"></div>
+                <div class="skeleton skeleton-meta"></div>
+                <div class="skeleton skeleton-meta" style="width: 30%;"></div>
+                <div style="margin-top: 16px;">
+                    <div class="skeleton skeleton-chip"></div>
+                    <div class="skeleton skeleton-chip"></div>
+                    <div class="skeleton skeleton-chip"></div>
+                </div>
+            `;
+            return div;
+        }
+        
+        function showLoadingSkeletons(count = 3) {
+            const list = document.getElementById('list');
+            
+            // Clear existing content
+            list.innerHTML = '';
+            loadingSkeletons = [];
+            
+            // Add skeleton loaders
+            for (let i = 0; i < count; i++) {
+                const skeleton = createLoadingSkeleton();
+                skeleton.style.animationDelay = `${i * 0.1}s`;
+                list.appendChild(skeleton);
+                loadingSkeletons.push(skeleton);
+            }
+        }
+        
+        function removeLoadingSkeletons() {
+            loadingSkeletons.forEach(skeleton => {
+                if (skeleton.parentNode) {
+                    skeleton.parentNode.removeChild(skeleton);
+                }
+            });
+            loadingSkeletons = [];
+        }
+        
+        function updateStats(data) {
+            // Total Mentions: Count of all articles
+            document.getElementById('total-mentions').textContent = data.length;
+            
+            // Today's Activity: Count of articles published today
+            const today = new Date().toDateString();
+            const todayMentions = data.filter(m => {
+                const articleDate = new Date(m.published).toDateString();
+                return articleDate === today;
+            }).length;
+            document.getElementById('today-mentions').textContent = todayMentions;
+            
+            // Active Sources: Count of unique sources
+            const uniqueSources = new Set(data.map(m => m.source));
+            document.getElementById('active-sources').textContent = uniqueSources.size;
+            
+            // Last Updated: Current timestamp
+            const now = new Date();
+            const timeString = now.toLocaleTimeString('en-US', { 
+                hour: '2-digit', 
+                minute: '2-digit',
+                hour12: false 
+            });
+            document.getElementById('last-updated').textContent = timeString;
+        }
+        
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            
+            // Format to match your format: "8/9/2025, 9:01:03 AM"
+            const options = {
+                year: 'numeric',
+                month: 'numeric',
+                day: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: true
+            };
+            
+            return date.toLocaleString('en-US', options);
+        }
+        
+        function addArticleCard(article, delay = 0) {
+            return new Promise((resolve) => {
+                setTimeout(() => {
+                    const list = document.getElementById('list');
+                    const div = document.createElement('div');
+                    div.className = 'card';
+                    div.style.animationDelay = `${delay}s`;
+                    
+                    const chips = (article.matched || []).map(k => 
+                        `<span class="chip">${k}</span>`
+                    ).join('');
+                    
+                    div.innerHTML = `
+                        <div class="card-content">
+                            <h3 class="card-title">
+                                <a href="${article.link}" target="_blank" rel="noopener">${article.title}</a>
+                            </h3>
+                            <div class="meta">
+                                <div class="meta-item">
+                                    ${article.source} · ${formatDate(article.published)}
+                                </div>
+                            </div>
+                            ${chips ? `<div class="chip-container">${chips}</div>` : ''}
+                        </div>
+                    `;
+                    
+                    list.appendChild(div);
+                    resolve();
+                }, delay * 100);
+            });
+        }
+        
+        async function loadMentions() {
+            try {
+                document.getElementById('err').style.display = 'none';
+                showLoadingSkeletons(5);
+                
+                const r = await fetch('/api/get_mentions?limit=50');
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                
+                const data = await r.json();
+                
+                // Calculate and update statistics
+                updateStats(data);
+                
+                // Remove skeleton loaders
+                removeLoadingSkeletons();
+                
+                const list = document.getElementById('list');
+                
+                if (data.length === 0) {
+                    list.innerHTML = `
+                        <div class="empty-state">
+                            <div class="empty-state-icon">📊</div>
+                            <h3>No mentions found</h3>
+                            <p>No cryptocurrency mentions have been collected yet.</p>
+                            <button class="refresh-btn" onclick="loadMentions()">Refresh Data</button>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                // Add articles one by one with staggered animation
+                for (let i = 0; i < data.length; i++) {
+                    await addArticleCard(data[i], i * 0.1);
+                }
+                
+            } catch (e) {
+                removeLoadingSkeletons();
+                const el = document.getElementById('err');
+                el.style.display = 'block';
+                el.textContent = 'Could not load mentions. ' + e.message;
+                console.error('Error loading mentions:', e);
+            }
+        }
+        
+        // Load mentions on page load
+        loadMentions();
+        
+        // Auto-refresh every 5 minutes
+        setInterval(loadMentions, 5 * 60 * 1000);
+    </script>
 </body>
 </html>

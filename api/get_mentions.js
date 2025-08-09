@@ -6,26 +6,35 @@ const redis = new Redis({
 });
 const ZSET = "mentions:z";
 
-// Normalize whatever ZRANGE returns into a JSON-parsed object array
+function looksLikeMention(o) {
+  return o && typeof o === "object" &&
+    ("title" in o) && ("link" in o) && ("source" in o) &&
+    ("published" in o || "published_ts" in o);
+}
+
+function toStringAny(v) {
+  if (typeof v === "string") return v;
+  if (Buffer.isBuffer(v))   return v.toString("utf-8");
+  if (v == null)            return "";
+  return String(v);
+}
+
+// Accepts: strings, Buffers, {member, score}, or direct objects
 function normalizeAndParse(items) {
   const out = [];
-  for (const it of items || []) {
-    // Case A: { member, score }
-    if (it && typeof it === "object" && "member" in it) {
-      const s = typeof it.member === "string"
-        ? it.member
-        : Buffer.isBuffer(it.member)
-          ? it.member.toString("utf-8")
-          : String(it.member);
+  for (const row of items || []) {
+    // Case 1: SDK returns {member, score}
+    if (row && typeof row === "object" && "member" in row) {
+      const m = row.member;
+      if (looksLikeMention(m)) { out.push(m); continue; }
+      const s = toStringAny(m);
       try { out.push(JSON.parse(s)); } catch {}
       continue;
     }
-    // Case B: plain string / buffer / other
-    const s = typeof it === "string"
-      ? it
-      : Buffer.isBuffer(it)
-        ? it.toString("utf-8")
-        : String(it);
+    // Case 2: SDK returns direct object as member
+    if (looksLikeMention(row)) { out.push(row); continue; }
+    // Case 3: plain string/buffer
+    const s = toStringAny(row);
     try { out.push(JSON.parse(s)); } catch {}
   }
   return out;
@@ -34,13 +43,9 @@ function normalizeAndParse(items) {
 export default async function handler(req, res) {
   try {
     const limit = Math.max(1, Math.min(500, parseInt(req.query.limit || "200", 10)));
-
-    // Newest-first directly from Redis
-    // Works whether the client returns strings or {member, score}
-    const raw = await redis.zrange(ZSET, 0, limit - 1, { rev: true, withScores: false });
-
+    // Newest-first
+    const raw = await redis.zrange(ZSET, 0, limit - 1, { rev: true, withScores: true });
     const out = normalizeAndParse(raw);
-
     res.setHeader("Content-Type", "application/json; charset=utf-8");
     res.status(200).send(JSON.stringify(out));
   } catch (e) {

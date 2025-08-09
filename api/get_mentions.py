@@ -1,8 +1,12 @@
 from http.server import BaseHTTPRequestHandler
 import json
-from vercel_kv import kv
+# --- FIX: Changed 'kv' to 'KV' ---
+from vercel_kv import KV
 
-class handler(BaseHTTPRequestHandler ):
+# --- FIX: Create an instance of the KV class ---
+kv = KV( )
+
+class handler(BaseHTTPRequestHandler):
     def do_GET(self):
         try:
             # Fetch the IDs of the latest 50 mentions from our sorted set, most recent first

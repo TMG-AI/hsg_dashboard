@@ -1,4 +1,4 @@
 requests
 feedparser
 slack_sdk
-vercel-kv
+upstash-redis

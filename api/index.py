@@ -1,57 +1,67 @@
-# --- api/index.py (Updated Function) ---
-
 import os
 import feedparser
 import requests
-import json
+from slack_sdk import WebClient
+from slack_sdk.errors import SlackApiError
 from http.server import BaseHTTPRequestHandler
 
-# ... (all the other configuration at the top of the file remains the same ) ...
-SLACK_WEBHOOK_URL = os.environ.get('https://hooks.slack.com/services/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')
-# ... (rest of the config) ...
+# --- CONFIGURATION ---
+# --- You will set these as Environment Variables in Vercel ---
+# Use the "Bot User OAuth Token" that starts with "xoxb-"
+SLACK_BOT_TOKEN = os.environ.get("SLACK_BOT_TOKEN" )
+# The name of the channel, e.g., "coinbase-intel" (no #)
+SLACK_CHANNEL_NAME = "coinbase-intel"
+TWITTER_BEARER_TOKEN = os.environ.get('TWITTER_BEARER_TOKEN')
+KEYWORDS_TO_TRACK = "Coinbase OR Base OR USDC"
 
+# --- List of RSS Feeds to Monitor ---
+RSS_FEEDS = {
+    "CoinDesk": "https://www.coindesk.com/arc/outboundfeeds/rss/",
+    "The Block": "https://www.theblock.co/rss.xml",
+    "Cointelegraph": "https://cointelegraph.com/rss",
+}
 
-# --- UPDATED Helper function to send a message to Slack ---
+# Initialize the Slack client
+slack_client = WebClient(token=SLACK_BOT_TOKEN )
+
+# --- Helper function to send a message to Slack ---
 def send_slack_notification(message):
-    if not SLACK_WEBHOOK_URL:
-        print("Slack Webhook URL not set. Cannot send notification.")
+    if not SLACK_BOT_TOKEN:
+        print("Slack Bot Token not set. Cannot send notification.")
         print(f"Message: {message}")
         return
     try:
-        # This is the key change: we specify the channel here.
-        # The webhook will post to '#coinbase-intel' regardless of its default setting.
-        payload = {
-            'text': message,
-            'channel': '#coinbase-intel' # This overrides the default channel
-        }
-        response = requests.post(SLACK_WEBHOOK_URL, json=payload)
-        # Optional: Check if Slack reported an error
-        if response.text != 'ok':
-            print(f"Slack returned an error: {response.text}")
-        else:
-            print(f"Successfully sent to Slack channel #coinbase-intel: {message}")
-    except Exception as e:
-        print(f"Error sending to Slack: {e}")
+        # The modern way to post a message
+        result = slack_client.chat_postMessage(
+            channel=coinbase-pr,
+            text=message
+        )
+        print(f"Successfully sent to Slack: {result['ts']}")
+    except SlackApiError as e:
+        print(f"Error sending to Slack: {e.response['error']}")
 
-# ... (the rest of the file, including the handler class, remains exactly the same) ...
-
+# --- Main handler function that Vercel will run ---
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
-        # ... (all the logic inside here is unchanged) ...
         print("--- Starting Scan ---")
 
         # 1. Check RSS Feeds
         print("Checking RSS Feeds...")
         for name, url in RSS_FEEDS.items():
-            feed = feedparser.parse(url)
-            for entry in feed.entries:
-                if any(keyword.lower() in entry.title.lower() for keyword in KEYWORDS_TO_TRACK.split(" OR ")):
-                    message = f"📰 *New Article Mention from {name}*\n>{entry.title}\n{entry.link}"
-                    send_slack_notification(message) # This will now post to #coinbase-intel
+            try:
+                feed = feedparser.parse(url)
+                for entry in feed.entries:
+                    if any(keyword.lower() in entry.title.lower() for keyword in KEYWORDS_TO_TRACK.split(" OR ")):
+                        message = f"📰 *New Article Mention from {name}*\n>{entry.title}\n{entry.link}"
+                        send_slack_notification(message)
+            except Exception as e:
+                print(f"Error parsing RSS feed {name}: {e}")
 
-        # ... (Twitter check also remains the same) ...
-        # ...
+        # 2. Check Twitter/X (code is unchanged, add it back if you need it)
+        print("Skipping Twitter check for now.")
 
+
+        # Send response back to Vercel
         self.send_response(200)
         self.send_header('Content-type','text/plain')
         self.end_headers()

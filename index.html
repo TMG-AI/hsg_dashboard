@@ -36,8 +36,7 @@
     .chip{background:linear-gradient(135deg,rgba(139,195,74,.15),rgba(139,195,74,.25));border:1px solid rgba(139,195,74,.3);border-radius:12px;padding:6px 12px;margin:4px 6px 4px 0;font-size:12px;font-weight:500;display:inline-block;color:#4a6741;transition:.3s}
     .chip:hover{background:linear-gradient(135deg,rgba(139,195,74,.25),rgba(139,195,74,.35));transform:scale(1.05)}
     .chip-container{margin-top:16px;padding-top:16px;border-top:1px solid rgba(139,195,74,.2)}
-    .sent{font-weight:700;margin-left:6px}
-    .pos{color:#0a7a35}.neg{color:#b00020}.neu{color:#666}
+
     .loading{display:flex;align-items:center;justify-content:center;padding:40px;color:#666}
     .loading::before{content:'';width:20px;height:20px;border:2px solid rgba(139,195,74,.3);border-top:2px solid #8bc34a;border-radius:50%;animation:spin 1s linear infinite;margin-right:12px}
     @keyframes spin{0%{transform:rotate(0)}100%{transform:rotate(360deg)}}
@@ -70,7 +69,7 @@
 
   <div class="wrap">
     <div class="stats-grid">
-      <div class="stat-card"><div class="stat-label">Total Mentions</div><div class="stat-value" id="total-mentions">0</div></div>
+      <div class="stat-card"><div class="stat-label">Last 24 Hours</div><div class="stat-value" id="total-mentions">0</div></div>
       <div class="stat-card"><div class="stat-label">Today's Activity</div><div class="stat-value" id="today-mentions">0</div></div>
       <div class="stat-card"><div class="stat-label">Active Sources</div><div class="stat-value" id="active-sources">0</div></div>
       <div class="stat-card"><div class="stat-label">Last Updated</div><div class="stat-value time" id="last-updated">-</div></div>
@@ -130,19 +129,24 @@
     }
 
     function updateStats(data){
-      document.getElementById('total-mentions').textContent=data.length;
+      // Total Mentions: Count articles from last 24 hours
+      const now = new Date();
+      const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+      const last24Hours = data.filter(m => new Date(m.published) >= twentyFourHoursAgo).length;
+      document.getElementById('total-mentions').textContent = last24Hours;
+      
       const today=new Date().toDateString();
       const todayMentions=data.filter(m=>new Date(m.published).toDateString()===today).length;
       document.getElementById('today-mentions').textContent=todayMentions;
       const uniqueSources=new Set(data.map(m=>m.source));
       document.getElementById('active-sources').textContent=uniqueSources.size;
-      const now=new Date();
-      document.getElementById('last-updated').textContent=now.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true});
+      const now2=new Date();
+      document.getElementById('last-updated').textContent=now2.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true});
     }
 
     function formatDate(s){
       const d=new Date(s);
-      return d.toLocaleString('en-US',{year:'numeric',month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit',second:'2-digit',hour12:true});
+      return d.toLocaleString('en-US',{year:'numeric',month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit',hour12:true});
     }
 
     function addArticleCard(container, article, delay=0){
@@ -152,15 +156,11 @@
           div.className='card';
           div.style.animationDelay=`${delay}s`;
           const chips=(article.matched||[]).map(k=>`<span class="chip">${k}</span>`).join('');
-          const sentClass=(typeof article.sentiment==='number')?(article.sentiment>0?'pos':article.sentiment<0?'neg':'neu'):'';
-          const sentText=(typeof article.sentiment==='number')?(article.sentiment>0?`+${article.sentiment}`:article.sentiment):'';
           div.innerHTML=`
             <div class="card-content">
               <h3 class="card-title"><a href="${article.link}" target="_blank" rel="noopener">${article.title}</a></h3>
               <div class="meta">
-                <div>${article.source} · ${formatDate(article.published)} · <b>${article.section||'Other'}</b>
-                  ${sentClass?`<span class="sent ${sentClass}">${sentText}</span>`:''}
-                </div>
+                <div>${article.source} · ${formatDate(article.published)}</div>
               </div>
               ${chips?`<div class="chip-container">${chips}</div>`:''}
             </div>`;
@@ -199,6 +199,9 @@
 
         // text filter
         const filtered = search ? data.filter(m => (m.title||"").toLowerCase().includes(search)) : data;
+
+        // Sort by date/time - newest first
+        filtered.sort((a, b) => new Date(b.published) - new Date(a.published));
 
         updateStats(filtered);
         removeLoadingSkeletons();

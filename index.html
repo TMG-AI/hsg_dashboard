@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Coinbase PR Dashboard</title>
+    <style>
+        /* --- Updated with the CORRECT Greenbrier Partners Colors --- */
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+            background-color: #f8f9fa; 
+            color: #212529; 
+            margin: 0; 
+        }
+        header { 
+            background-color: #5cb874; /* Correct, brighter green from your screenshot */
+            color: white; 
+            padding: 20px 40px; 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1); 
+        }
+        header h1 { 
+            margin: 0; 
+            font-size: 24px; 
+            font-weight: 600;
+        }
+        main { 
+            padding: 40px; 
+            max-width: 900px; 
+            margin: auto; 
+        }
+        #mentions-container { 
+            display: grid; 
+            gap: 20px; 
+        }
+        .mention-card { 
+            background-color: white; 
+            border: 1px solid #e9ecef; 
+            border-radius: 8px; 
+            padding: 20px; 
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05); 
+            transition: box-shadow 0.2s ease-in-out; 
+        }
+        .mention-card:hover { 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1); 
+        }
+        .mention-card h2 { 
+            font-size: 18px; 
+            margin: 0 0 10px 0; 
+        }
+        .mention-card a { 
+            text-decoration: none; 
+            color: #2A5D52; /* Using the darker green for readable links */
+            font-weight: 600;
+        }
+        .mention-card a:hover {
+            text-decoration: underline;
+        }
+        .mention-card .meta { 
+            font-size: 14px; 
+            color: #6c757d; 
+        }
+        #loader { 
+            text-align: center; 
+            font-size: 18px; 
+            color: #6c757d; 
+            padding: 50px; 
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Coinbase Media Mentions</h1>
+    </header>
+
+    <main>
+        <div id="mentions-container">
+            <div id="loader">Loading mentions...</div>
+        </div>
+    </main>
+
+    <script>
+        // This script contains NO mock data. It fetches real data from your API.
+        document.addEventListener('DOMContentLoaded', function() {
+            fetch('/api/get_mentions')
+                .then(response => response.json())
+                .then(mentions => {
+                    const container = document.getElementById('mentions-container');
+                    const loader = document.getElementById('loader');
+                    
+                    container.innerHTML = '';
+
+                    if (!mentions || mentions.length === 0) {
+                        container.innerHTML = '<p>No mentions found yet. The data collector runs on a schedule.</p>';
+                        return;
+                    }
+
+                    mentions.forEach(mention => {
+                        const card = document.createElement('div');
+                        card.className = 'mention-card';
+
+                        const title = document.createElement('h2');
+                        const link = document.createElement('a');
+                        link.href = mention.link;
+                        link.textContent = mention.title;
+                        link.target = '_blank';
+                        title.appendChild(link);
+
+                        const meta = document.createElement('p');
+                        meta.className = 'meta';
+                        
+                        let publishedDate = "Date not available";
+                        if (mention.published) {
+                           publishedDate = new Date(mention.published).toLocaleString();
+                        }
+                        
+                        meta.textContent = `Source: ${mention.source} | Published: ${publishedDate}`;
+                        
+                        card.appendChild(title);
+                        card.appendChild(meta);
+                        container.appendChild(card);
+                    });
+                })
+                .catch(error => {
+                    console.error('Error fetching mentions:', error);
+                    const container = document.getElementById('mentions-container');
+                    container.innerHTML = '<p>Could not load mentions. Please check the browser console for errors.</p>';
+                });
+        });
+    </script>
+
+</body>
+</html>

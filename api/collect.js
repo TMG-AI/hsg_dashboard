@@ -17,13 +17,13 @@ const URGENT    = (process.env.ALERT_KEYWORDS_URGENT || "").split(",").map(s=>s.
 
 // ---- Section rules by hostname ----
 const SECTION_RULES = {
-  // Top-tier crypto (your original five stay as-is too)
+  // Top-tier crypto
   "coindesk.com": "Top Crypto News",
   "theblock.co": "Top Crypto News",
   "cointelegraph.com": "Top Crypto News",
   "decrypt.co": "Top Crypto News",
   "blockworks.co": "Top Crypto News",
-  // New: major sources
+  // Major sources
   "news.bitcoin.com": "Major Sources",
   "crypto.news": "Major Sources",
   "newsbtc.com": "Major Sources",
@@ -36,6 +36,7 @@ const SECTION_RULES = {
   "bitcoinnews.com": "Specialized",
 };
 
+// ---------- helpers ----------
 function normalizeUrl(u) {
   try {
     const url = new URL(u);
@@ -66,16 +67,33 @@ function sectionFor(link, fallbackSourceTitle) {
   const raw = hostOf(link);
   const host = normalizeHost(raw);
 
-  // Use SECTION_RULES; match exact host or any subdomain of a rule key
+  // match exact host or any subdomain of a rule key
   for (const [key, sec] of Object.entries(SECTION_RULES)) {
     if (host === key || host.endsWith("." + key)) return sec;
   }
 
-  // Fallback heuristic
+  // fallback heuristic
   if ((fallbackSourceTitle || "").toLowerCase().includes("bitcoin")) return "Major Sources";
   return "Other";
 }
 
+// Google Alerts unwrap + nicer source label
+function unwrapGoogleAlert(u) {
+  // If link is a Google Alerts redirect (/url?q=...), return the real target URL.
+  try {
+    const url = new URL(u);
+    if (url.hostname.endsWith("google.com") && url.pathname === "/url") {
+      return url.searchParams.get("q") || url.searchParams.get("url") || u;
+    }
+    return u;
+  } catch { return u; }
+}
+
+function displaySource(link, fallback) {
+  // Prefer article host as "source" (helps for Google Alerts)
+  const h = normalizeHost(hostOf(link));
+  return h || (fallback || "");
+}
 
 function matchKeywords(text){ const t=(text||"").toLowerCase(); return KEYWORDS.filter(k=>t.includes(k)); }
 function isUrgent(m){ if(!URGENT.length) return false; const set=new Set(m.map(x=>x.toLowerCase())); return URGENT.some(u=>set.has(u)); }
@@ -110,6 +128,7 @@ async function sendEmail(m){
   });
 }
 
+// ---------- handler ----------
 export default async function handler(req, res) {
   try {
     if (!RSS_FEEDS.length || !KEYWORDS.length) {
@@ -119,11 +138,12 @@ export default async function handler(req, res) {
 
     for (const url of RSS_FEEDS) {
       const feed = await parser.parseURL(url);
-      const source = feed?.title || url;
+      const feedTitle = feed?.title || url;
 
       for (const e of feed?.items || []) {
         const title = (e.title||"").trim();
-        const link  = (e.link ||"").trim();
+        const rawLink = (e.link ||"").trim();
+        const link  = unwrapGoogleAlert(rawLink);
         const sum   = e.contentSnippet || e.content || e.summary || "";
         const matched = matchKeywords(`${title}\n${sum}\n${link}`);
         if (!matched.length) continue;
@@ -139,14 +159,14 @@ export default async function handler(req, res) {
         await redis.sadd(SEEN_ID, mid); // back-compat
 
         const ts = toEpoch(e.isoDate || e.pubDate || e.published || e.updated);
-        const section = sectionFor(link, source);
+        const section = sectionFor(link, feedTitle);
         const m = {
           id: mid,
           canon,
           section,
           title: title || "(untitled)",
           link,
-          source,
+          source: displaySource(link, feedTitle),
           matched,
           published_ts: ts,
           published: new Date(ts*1000).toISOString()

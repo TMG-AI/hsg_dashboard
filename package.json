@@ -3,11 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "scripts": {
-    "dev": "vercel dev",
-    "build": "echo \"No build step\"",
-    "start": "vercel dev"
-  },
+  "engines": { "node": ">=18" },
   "dependencies": {
     "@upstash/redis": "^1.28.4",
     "rss-parser": "^3.13.0",

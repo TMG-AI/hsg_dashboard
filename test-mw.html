@@ -1,0 +1,53 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Test Meltwater POST</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>body{font-family:system-ui,arial,sans-serif;max-width:820px;margin:40px auto;padding:0 16px} textarea,input{width:100%} textarea{height:240px}</style>
+</head>
+<body>
+  <h1>Send test payload to /api/meltwater_webhook</h1>
+  <label>MW Webhook Secret</label>
+  <input id="secret" placeholder="MW_WEBHOOK_SECRET" />
+  <label style="margin-top:12px;display:block;">JSON Payload</label>
+  <textarea id="payload">{
+  "results":[
+    {
+      "Title":"Coinbase headline",
+      "URL":"https://example.com/news?id=123&utm_source=foo",
+      "Source Name":"Example News",
+      "Date":"2025-08-10",
+      "Time":"12:00:00",
+      "Document ID":"mw_demo_001",
+      "Input Name":"Coinbase Alerts",
+      "Permalink":"https://app.meltwater.com/..."
+    }
+  ]
+}</textarea>
+  <button id="send" style="margin-top:12px;">Send</button>
+  <pre id="out" style="margin-top:16px;background:#f6f6f6;padding:12px;white-space:pre-wrap;"></pre>
+  <script>
+    document.getElementById('send').onclick = async () => {
+      const secret = document.getElementById('secret').value.trim();
+      const payload = document.getElementById('payload').value;
+      const out = document.getElementById('out');
+      out.textContent = 'Sending...';
+      try {
+        const res = await fetch('/api/meltwater_webhook', {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            'x-mw-secret': secret
+          },
+          body: payload
+        });
+        const text = await res.text();
+        out.textContent = `Status: ${res.status}\n\n${text}`;
+      } catch (e) {
+        out.textContent = String(e);
+      }
+    };
+  </script>
+</body>
+</html>

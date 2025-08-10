@@ -92,7 +92,10 @@ export default async function handler(req, res){
     }
 
     const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
-
+const urlObj = new URL(req.url, "http://localhost");
+const forceParam = urlObj.searchParams.get("force");
+const force = (forceParam === "1" || forceParam === "true" || (body && body.force === true));
+    
     const items = Array.isArray(body?.results) ? body.results
                : Array.isArray(body?.items)   ? body.items
                : body?.result ? [body.result]

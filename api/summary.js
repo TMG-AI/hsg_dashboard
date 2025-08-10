@@ -9,6 +9,13 @@ function windowToSeconds(w = "24h") {
   return 24 * 3600;
 }
 
+// Normalize zrange row -> JSON string
+function memberString(raw) {
+  if (typeof raw === "string") return raw;
+  if (raw && typeof raw.member === "string") return raw.member; // withScores format
+  try { return JSON.stringify(raw); } catch { return ""; }
+}
+
 export default async function handler(req, res){
   try{
     if (req.method !== "GET") { res.status(405).send("Use GET"); return; }
@@ -17,7 +24,13 @@ export default async function handler(req, res){
     const now = Math.floor(Date.now()/1000);
     const since = now - windowToSeconds(win);
 
-    const rows = await redis.zrange(ZSET, since, now, { byScore: true });
+    // Main fetch by score window
+    let rows = await redis.zrange(ZSET, since, now, { byScore: true });
+
+    // Fallback: if window query returns 0, pull recent 200 newest
+    if (!rows || rows.length === 0) {
+      rows = await redis.zrange(ZSET, 0, 200, { rev: true });
+    }
 
     let total = 0;
     const byOrigin = { meltwater: 0, rss: 0, reddit: 0, x: 0, other: 0 };
@@ -26,14 +39,18 @@ export default async function handler(req, res){
 
     for (const raw of rows) {
       try {
-        const m = JSON.parse(raw);
-        total++;
+        const s = memberString(raw);
+        const m = JSON.parse(s);
 
         const origin = (m.origin || "").toLowerCase();
+        if (!origin) continue;
+
+        // Count totals
+        total++;
         if (byOrigin[origin] === undefined) byOrigin.other++;
         else byOrigin[origin]++;
 
-        // Only rank news outlets (meltwater + rss)
+        // Rank only news outlets
         if (origin === "meltwater" || origin === "rss") {
           const pub = (m.source || "Unknown").trim();
           const reach = parseInt(m?.provider_meta?.reach || 0, 10) || 0;
@@ -49,10 +66,11 @@ export default async function handler(req, res){
             reach
           });
         }
-      } catch {}
+      } catch {
+        // skip bad rows
+      }
     }
 
-    // Top 5 publishers by total reach; include up to 5 articles per publisher
     const top_publishers = Object.entries(byPublisher)
       .sort((a, b) => b[1].reach - a[1].reach)
       .slice(0, 5)

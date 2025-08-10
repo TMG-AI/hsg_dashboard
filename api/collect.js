@@ -8,17 +8,25 @@ const redis = new Redis({
   token: process.env.KV_REST_API_TOKEN
 });
 
-// IMPORTANT: enable YouTube fields so we can match on video descriptions.
+// Enable YouTube media fields AND send a browser-like UA to avoid 403/404 blocks.
 const parser = new Parser({
   customFields: {
     item: [
-      // YouTube-specific / media RSS fields we want extracted:
       ['media:group', 'media', { keepArray: false }],
       ['media:description', 'mediaDescription'],
       ['media:content', 'mediaContent', { keepArray: false }],
       ['media:thumbnail', 'mediaThumb', { keepArray: false }],
     ]
-  }
+  },
+  requestOptions: {
+    headers: {
+      'User-Agent':
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
+        '(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      'Accept': 'application/rss+xml, application/atom+xml, application/xml;q=0.9, */*;q=0.8',
+    },
+    timeout: 10_000,
+  },
 });
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
@@ -82,16 +90,11 @@ function hostOf(u) {
 }
 
 function normalizeHost(h) {
-  // collapse common subdomains so www.coindesk.com → coindesk.com
-  return (h || "")
-    .toLowerCase()
-    .replace(/^www\./, "")
-    .replace(/^amp\./, "");
+  return (h || "").toLowerCase().replace(/^www\./, "").replace(/^amp\./, "");
 }
 
 function sectionFor(link, fallbackSourceTitle) {
-  const raw = hostOf(link);
-  const host = normalizeHost(raw);
+  const host = normalizeHost(hostOf(link));
   for (const [key, sec] of Object.entries(SECTION_RULES)) {
     if (host === key || host.endsWith("." + key)) return sec;
   }
@@ -124,12 +127,7 @@ function buildYouTubeWatchUrl(maybeIdOrUrl) {
   return s;
 }
 
-/**
- * Extract link robustly from rss-parser item (RSS/Atom/YouTube):
- * - e.link can be a string, object {href}, or array
- * - e.links may be an array of {href}
- * - for YouTube we may only have a videoId in custom fields
- */
+/** robust link extraction across RSS/Atom/YouTube */
 function extractItemLink(e) {
   let raw =
     (e.link && typeof e.link === "object" && e.link.href) ? e.link.href :
@@ -140,7 +138,6 @@ function extractItemLink(e) {
 
   raw = unwrapGoogleAlert(raw);
 
-  // YouTube: use yt:videoId if link isn't a URL
   const ytId =
     e["yt:videoId"] ||
     e.videoId ||
@@ -154,7 +151,6 @@ function extractItemLink(e) {
       raw = buildYouTubeWatchUrl(raw);
     }
   }
-
   return (raw || "").trim();
 }
 
@@ -208,96 +204,93 @@ async function sendEmail(m) {
   });
 }
 
-// ---------- handler ----------
+// ---------- handler (per-feed isolation + diagnostics) ----------
 export default async function handler(req, res) {
+  if (!RSS_FEEDS.length || !KEYWORDS.length) {
+    res.status(400).json({ ok: false, error: "Missing RSS_FEEDS or KEYWORDS" });
+    return;
+  }
+
+  let found = 0, stored = 0, emailed = 0;
+  const errors = [];
+
   try {
-    if (!RSS_FEEDS.length || !KEYWORDS.length) {
-      res.status(400).json({ ok: false, error: "Missing RSS_FEEDS or KEYWORDS" });
-      return;
-    }
-
-    let found = 0, stored = 0, emailed = 0;
-
     for (const url of RSS_FEEDS) {
-      const feed = await parser.parseURL(url);
-      const feedTitle = feed?.title || url;
+      try {
+        const feed = await parser.parseURL(url);
+        const feedTitle = feed?.title || url;
 
-      for (const e of feed?.items || []) {
-        const title = (e.title || "").trim();
+        for (const e of feed?.items || []) {
+          const title = (e.title || "").trim();
 
-        // Prefer YouTube description when present; else normal fields
-        const ytDesc =
-          e.mediaDescription ||
-          e?.media?.description ||
-          e?.mediaContent?.description ||
-          "";
+          // Prefer YouTube description when present; else normal fields
+          const ytDesc =
+            e.mediaDescription ||
+            e?.media?.description ||
+            e?.mediaContent?.description ||
+            "";
 
-        const sum =
-          ytDesc ||
-          e.contentSnippet ||
-          e.content ||
-          e.summary ||
-          "";
+          const sum = ytDesc || e.contentSnippet || e.content || e.summary || "";
 
-        // Robust link extraction (Google Alerts + Atom + YouTube)
-        const link = extractItemLink(e);
+          // Robust link extraction (Google Alerts + Atom + YouTube)
+          const link = extractItemLink(e);
 
-        // Include feed title in the context to catch official channels (Coinbase, Base)
-        let matched = matchKeywords(`${title}\n${sum}\n${feedTitle}\n${link}`);
+          // Include feed title in the context to catch official channels (Coinbase, Base)
+          let matched = matchKeywords(`${title}\n${sum}\n${feedTitle}\n${link}`);
 
-// If it's YouTube AND the channel looks official, force a match
-const isYT = /youtube\.com|youtu\.be/.test((new URL(link)).hostname);
-const isOfficialYT = isYT && /coinbase|^base\b|build on base/i.test(feedTitle || "");
-if (!matched.length && isOfficialYT) matched = ["coinbase"];
+          // If it's YouTube AND the channel looks official, force a match
+          let isYT = false;
+          try { const h = hostOf(link); isYT = /youtube\.com|youtu\.be/.test(h); } catch {}
+          const isOfficialYT = isYT && /(^|\b)(coinbase|build on base|base\b)/i.test(feedTitle || "");
+          if (!matched.length && isOfficialYT) matched = ["coinbase"];
 
-// Still skip if no match at all
-if (!matched.length) continue;
+          if (!matched.length) continue;
 
+          const canon = normalizeUrl(link || title);
+          if (!canon) continue;
 
-        const canon = normalizeUrl(link || title);
-        if (!canon) continue;
+          // Canonical URL de-dupe first
+          const addCanon = await redis.sadd(SEEN_LINK, canon); // 1=new, 0=seen
+          if (addCanon !== 1) continue;
 
-        // Canonical URL de-dupe first
-        const addCanon = await redis.sadd(SEEN_LINK, canon); // 1=new, 0=seen
-        if (addCanon !== 1) continue;
+          const mid = idFromCanonical(canon);
+          await redis.sadd(SEEN_ID, mid); // back-compat
 
-        const mid = idFromCanonical(canon);
-        await redis.sadd(SEEN_ID, mid); // back-compat
+          const ts = toEpoch(e.isoDate || e.pubDate || e.published || e.updated);
+          const section = sectionFor(link, feedTitle);
 
-        const ts = toEpoch(e.isoDate || e.pubDate || e.published || e.updated);
-        const section = sectionFor(link, feedTitle);
+          const m = {
+            id: mid,
+            canon,
+            section,
+            title: title || "(untitled)",
+            link,
+            source: displaySource(link, feedTitle),
+            matched,
+            published_ts: ts,
+            published: new Date(ts * 1000).toISOString()
+          };
 
-        const m = {
-          id: mid,
-          canon,
-          section,
-          title: title || "(untitled)",
-          link,
-          source: displaySource(link, feedTitle),
-          matched,
-          published_ts: ts,
-          published: new Date(ts * 1000).toISOString()
-        };
+          if (ENABLE_SENTIMENT) m.sentiment = sentimentScore(`${title} ${sum}`);
 
-        if (ENABLE_SENTIMENT) {
-          m.sentiment = sentimentScore(`${title} ${sum}`);
+          await redis.zadd(ZSET, { score: ts, member: JSON.stringify(m) });
+
+          const count = await redis.zcard(ZSET);
+          if (count > MAX_MENTIONS) {
+            await redis.zremrangebyrank(ZSET, 0, count - MAX_MENTIONS - 1);
+          }
+
+          if (isUrgent(matched)) { try { await sendEmail(m); emailed++; } catch {} }
+
+          found++; stored++;
         }
-
-        await redis.zadd(ZSET, { score: ts, member: JSON.stringify(m) });
-
-        const count = await redis.zcard(ZSET);
-        if (count > MAX_MENTIONS) {
-          await redis.zremrangebyrank(ZSET, 0, count - MAX_MENTIONS - 1);
-        }
-
-        if (isUrgent(matched)) {
-          try { await sendEmail(m); emailed++; } catch {}
-        }
-        found++; stored++;
+      } catch (err) {
+        errors.push({ url, error: err?.message || String(err) });
+        // continue to the next feed
       }
     }
 
-    res.status(200).json({ ok: true, feeds: RSS_FEEDS.length, found, stored, emailed });
+    res.status(200).json({ ok: true, feeds: RSS_FEEDS.length, found, stored, emailed, errors });
   } catch (e) {
     res.status(500).json({ ok: false, error: `collect failed: ${e?.message || e}` });
   }

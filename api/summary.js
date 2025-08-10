@@ -2,28 +2,30 @@ import { Redis } from "@upstash/redis";
 const redis = new Redis({ url: process.env.KV_REST_API_URL, token: process.env.KV_REST_API_TOKEN });
 const ZSET = "mentions:z";
 
-function windowToSeconds(w = "24h") {
-  const x = String(w).toLowerCase();
-  if (x === "7d") return 7 * 24 * 3600;
-  if (x === "30d") return 30 * 24 * 3600;
-  return 24 * 3600; // 24h default
+function etBoundsToday() {
+  const nowUtc = new Date();
+  const etNow = new Date(nowUtc.toLocaleString("en-US", { timeZone: "America/New_York" }));
+  const y = etNow.getFullYear(), m = etNow.getMonth(), d = etNow.getDate();
+  // offset between ET and UTC at this moment
+  const offsetMs = etNow.getTime() - nowUtc.getTime(); // -4h (DST) or -5h (STD)
+  const startUtcMs = Date.UTC(y, m, d) - offsetMs;     // midnight ET in UTC ms
+  const endUtcMs = Date.now();                         // "so far"
+  return { since: Math.floor(startUtcMs/1000), until: Math.floor(endUtcMs/1000) };
 }
 
 export default async function handler(req, res){
   try{
     if (req.method !== "GET") { res.status(405).send("Use GET"); return; }
 
-    const win = String(req.query.window || "24h");
-    const now = Math.floor(Date.now()/1000);
-    const since = now - windowToSeconds(win);
+    const { since, until } = etBoundsToday();
 
-    // Fetch most recent 1000 items (newest first), then filter by published_ts
+    // Pull newest first (up to 1000), then filter by published_ts within ET "today"
     const rows = await redis.zrange(ZSET, 0, 1000, { rev: true });
 
     let total = 0;
     const byOrigin = { meltwater: 0, rss: 0, reddit: 0, x: 0, other: 0 };
-    const byPublisher = {};          // { publisher: { reach, count } }
-    const articlesByPublisher = {};  // { publisher: [ { title, link, reach } ] }
+    const byPublisher = {};
+    const articlesByPublisher = {};
 
     for (const member of rows) {
       let m;
@@ -31,14 +33,13 @@ export default async function handler(req, res){
       catch { continue; }
 
       const ts = Number(m?.published_ts || 0);
-      if (!Number.isFinite(ts) || ts < since) continue; // keep only window items
+      if (!Number.isFinite(ts) || ts < since || ts > until) continue;
 
       const origin = (m.origin || "").toLowerCase();
       total++;
       if (byOrigin[origin] === undefined) byOrigin.other++;
       else byOrigin[origin]++;
 
-      // Rank only news outlets (meltwater + rss)
       if (origin === "meltwater" || origin === "rss") {
         const pub = (m.source || "Unknown").trim();
         const reach = parseInt(m?.provider_meta?.reach || 0, 10) || 0;
@@ -70,7 +71,7 @@ export default async function handler(req, res){
 
     res.status(200).json({
       ok: true,
-      window: win,
+      window: "today_ET",
       totals: { all: total, by_origin: byOrigin },
       top_publishers,
       generated_at: new Date().toISOString()

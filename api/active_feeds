@@ -1,0 +1,11 @@
+export default function handler(req, res) {
+  const raw = process.env.RSS_FEEDS || "";
+  const feeds = raw.split(",").map(s => s.trim()).filter(Boolean);
+  res.status(200).json({
+    vercel_env: process.env.VERCEL_ENV || null,         // "production", "preview", or "development"
+    vercel_url: process.env.VERCEL_URL || null,
+    count: feeds.length,
+    first5: feeds.slice(0,5),                           // quick peek
+    has_youtube: feeds.some(u => /youtube\.com/.test(u)),
+  });
+}

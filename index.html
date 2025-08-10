@@ -281,5 +281,65 @@
     loadMentions();
     setInterval(loadMentions, 5*60*1000);
   </script>
+  <script>
+(async function(){
+  try{
+    const res = await fetch('/api/summary?window=24h', { cache: 'no-store' });
+    const data = await res.json();
+    if (!data?.ok) return;
+
+    // Fill counts
+    const fmt = (n) => (typeof n === 'number' && Number.isFinite(n) && n.toLocaleString) ? n.toLocaleString() : (n ?? '0');
+    const by = (data.totals && data.totals.by_origin) ? data.totals.by_origin : {};
+
+    const setText = (id, val) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = fmt(val);
+    };
+
+    setText('sb-total', data.totals?.all);
+    setText('sb-mw',    by.meltwater);
+    setText('sb-rss',   by.rss);
+    setText('sb-reddit',by.reddit);
+    setText('sb-x',     by.x);
+
+    // Build Top Outlets (clickable titles)
+    const wrap = document.getElementById('top-outlets');
+    if (!wrap) return;
+
+    const pubs = data.top_publishers || [];
+    if (!pubs.length) { wrap.innerHTML = ''; return; }
+
+    let html = '<div style="margin:8px 0 12px 0;font-size:18px;font-weight:600;">Top Outlets (24h)</div>';
+    pubs.forEach((p) => {
+      const reach = fmt(p.total_reach ?? 0);
+      html += '<div style="border:1px solid #e5e7eb;border-radius:12px;padding:12px;margin-bottom:12px;">'
+           +    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">'
+           +      '<div style="font-weight:600;">' + (p.publisher || 'Unknown') + '</div>'
+           +      '<div style="font-size:12px;opacity:.7;">Reach: ' + reach + '</div>'
+           +    '</div>'
+           +    '<ul style="padding-left:18px;margin:0;">';
+
+      (p.articles || []).forEach((a) => {
+        const title = a.title || '(untitled)';
+        const reachTxt = (typeof a.reach === 'number') ? ' <span style="font-size:12px;opacity:.7;">(reach ' + fmt(a.reach) + ')</span>' : '';
+        if (a.link) {
+          html += '<li style="margin:6px 0;"><a href="' + a.link + '" target="_blank" rel="noreferrer" style="text-decoration:underline;">' + title + '</a>' + reachTxt + '</li>';
+        } else {
+          html += '<li style="margin:6px 0;">' + title + reachTxt + '</li>';
+        }
+      });
+
+      html +=   '</ul>'
+           +  '</div>';
+    });
+
+    wrap.innerHTML = html;
+  } catch(e) {
+    // no-op
+  }
+})();
+</script>
+
 </body>
 </html>

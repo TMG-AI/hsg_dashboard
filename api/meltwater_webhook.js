@@ -21,7 +21,26 @@ function normalizeUrl(u){
 }
 
 function idFromCanonical(canon){ let h=0; for (let i=0;i<canon.length;i++) h=(h*31+canon.charCodeAt(i))>>>0; return `m_${h.toString(16)}`; }
-function toEpoch(d){ const t=Date.parse(d); return Number.isFinite(t)?Math.floor(t/1000):Math.floor(Date.now()/1000); }
+function toEpoch(d){
+  // Try normal parse
+  let t = Date.parse(d);
+
+  // Fallback: if format like "YYYY-MM-DD HH:mm:ss", treat as UTC
+  if (!Number.isFinite(t) && d) {
+    const m = /^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2})$/.exec(String(d));
+    if (m) t = Date.parse(`${m[1]}T${m[2]}Z`);
+  }
+
+  // Default to now if still invalid
+  let sec = Math.floor((Number.isFinite(t) ? t : Date.now()) / 1000);
+
+  // Clamp future times to now so they appear in the 24h window
+  const now = Math.floor(Date.now() / 1000);
+  if (sec > now) sec = now;
+
+  return sec;
+}
+
 
 function pickFields(it){
   const title = it.title || it.headline || it.summaryTitle || it["Headline"] || it["Title"] || "(untitled)";

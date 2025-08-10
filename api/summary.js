@@ -21,8 +21,8 @@ export default async function handler(req, res){
 
     let total = 0;
     const byOrigin = { meltwater: 0, rss: 0, reddit: 0, x: 0, other: 0 };
-    const byPublisher = {};
-    const articlesByPublisher = {};
+    const byPublisher = {};          // { publisher: { reach, count } }
+    const articlesByPublisher = {};  // { publisher: [ { title, link, reach } ] }
 
     for (const raw of rows) {
       try {
@@ -33,10 +33,10 @@ export default async function handler(req, res){
         if (byOrigin[origin] === undefined) byOrigin.other++;
         else byOrigin[origin]++;
 
-        // Only consider "article" origins for publisher ranking
+        // Only rank news outlets (meltwater + rss)
         if (origin === "meltwater" || origin === "rss") {
           const pub = (m.source || "Unknown").trim();
-          const reach = parseInt(m.provider_meta?.reach || 0, 10) || 0;
+          const reach = parseInt(m?.provider_meta?.reach || 0, 10) || 0;
 
           if (!byPublisher[pub]) byPublisher[pub] = { reach: 0, count: 0 };
           byPublisher[pub].reach += reach;
@@ -45,15 +45,15 @@ export default async function handler(req, res){
           if (!articlesByPublisher[pub]) articlesByPublisher[pub] = [];
           articlesByPublisher[pub].push({
             title: m.title,
-            link: m.link || m.provider_meta?.permalink || null,
+            link: m.link || m?.provider_meta?.permalink || null,
             reach
           });
         }
       } catch {}
     }
 
-    // Pick top 5 publishers by total reach
-    const topPublishers = Object.entries(byPublisher)
+    // Top 5 publishers by total reach; include up to 5 articles per publisher
+    const top_publishers = Object.entries(byPublisher)
       .sort((a, b) => b[1].reach - a[1].reach)
       .slice(0, 5)
       .map(([publisher, stats]) => ({
@@ -61,19 +61,15 @@ export default async function handler(req, res){
         total_reach: stats.reach,
         article_count: stats.count,
         articles: (articlesByPublisher[publisher] || [])
-          .slice(0, 5) // cap to 5 articles per publisher
-          .map(a => ({
-            title: a.title,
-            link: a.link,
-            reach: a.reach
-          }))
+          .slice(0, 5)
+          .map(a => ({ title: a.title, link: a.link, reach: a.reach }))
       }));
 
     res.status(200).json({
       ok: true,
       window: win,
       totals: { all: total, by_origin: byOrigin },
-      top_publishers: topPublishers,
+      top_publishers,
       generated_at: new Date().toISOString()
     });
   } catch (e) {

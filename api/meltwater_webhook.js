@@ -107,14 +107,15 @@ export default async function handler(req, res){
       const canon = normalizeUrl(url || title);
       const ts = toEpoch(publishedISO);
 
-      if (mwId) {
-        const first = await redis.sadd(SEEN_MW, String(mwId));
-        if (first !== 1) continue;
-      } else if (canon) {
-        const first = await redis.sadd(SEEN_URL, canon);
-        if (first !== 1) continue;
-      }
-
+      if (!force) {
+  if (mwId) {
+    const first = await redis.sadd(SEEN_MW, String(mwId));
+    if (first !== 1) continue;
+  } else if (canon) {
+    const first = await redis.sadd(SEEN_URL, canon);
+    if (first !== 1) continue;
+  }
+}
       const mid = mwId ? `mw_${String(mwId)}` : idFromCanonical(canon || title);
 
       const mention = {

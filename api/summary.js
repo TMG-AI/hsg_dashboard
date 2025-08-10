@@ -51,12 +51,22 @@ export default async function handler(req, res){
       const ts = Number(m.published_ts ?? 0);
       if (!Number.isFinite(ts) || ts < since || ts > until) continue;
 
-      const origin = String(m.origin || "").toLowerCase();
+      // Normalize origin; treat section === "Meltwater" as meltwater when origin is missing
+const rawOrigin = String(m.origin || "").toLowerCase().trim();
+let origin = rawOrigin;
+if (!origin && String(m.section || "").toLowerCase() === "meltwater") origin = "meltwater";
+if (origin === "twitter" || origin === "tweet" || origin === "twitter/x") origin = "x";
+if (!["meltwater","rss","reddit","x"].includes(origin)) origin = "other";
+
       total++;
       if (byOrigin[origin] === undefined) byOrigin.other++;
       else byOrigin[origin]++;
 
-      if (origin === "meltwater" || origin === "rss") {
+      // News outlets = meltwater/rss OR items whose section says Meltwater but origin was missing
+const isNews = (origin === "meltwater" || origin === "rss" ||
+               (!rawOrigin && String(m.section || "").toLowerCase() === "meltwater"));
+if (isNews) {
+
         const pub = (m.source || "Unknown").trim();
         const reach = parseInt(m?.provider_meta?.reach || 0, 10) || 0;
 

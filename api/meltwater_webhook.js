@@ -21,6 +21,7 @@ function normalizeUrl(u){
 }
 
 function idFromCanonical(canon){ let h=0; for (let i=0;i<canon.length;i++) h=(h*31+canon.charCodeAt(i))>>>0; return `m_${h.toString(16)}`; }
+
 function toEpoch(d){
   // Try normal parse
   let t = Date.parse(d);
@@ -41,24 +42,27 @@ function toEpoch(d){
   return sec;
 }
 
-
+// Extract fields from Meltwater JSON (handles both Smart Alerts and CSV-like keys)
 function pickFields(it){
   const title = it.title || it.headline || it.summaryTitle || it["Headline"] || it["Title"] || "(untitled)";
-  const url   = it.url || it.link || it.permalink || it["URL"] || "";
+  const url   = it.url || it.link || it.permalink || it?.links?.article || it["URL"] || "";
   const source= it.source_name || it.source || it.publisher || it["Source Name"] || it["Publisher"] || "Meltwater";
-  const publishedISO = it.published_at || it.date || it.published
-    || (it["Date"] && it["Time"] ? `${it["Date"]} ${it["Time"]}` : new Date().toISOString());
+
+  const publishedISO =
+    it.published_at || it.date || it.published ||
+    (it["Date"] && it["Time"] ? `${it["Date"]} ${it["Time"]}` : new Date().toISOString());
+
   const mwId = it.id || it.document_id || it.documentId || it["Document ID"] || null;
-  const mwPermalink = it.permalink || it.meltwater_url || it["Permalink"] || null;
+  const mwPermalink = it.permalink || it.meltwater_url || it?.links?.app || it["Permalink"] || null;
 
   const meta = {
-    alert: it.alert_name || it.search_name || it["Input Name"] || null,
+    alert: it.alert_name || it.search_name || it.source || it["Input Name"] || null,
     keywords: it.keywords || it["Keywords"] || null,
     information_type: it.information_type || it["Information Type"] || null,
     source_type: it.source_type || it["Source Type"] || null,
     source_domain: it.source_domain || it["Source Domain"] || null,
     content_type: it.content_type || it["Content Type"] || null,
-    author: it.author || it["Author Name"] || null,
+    author: it.author || it["Author Name"] || it.authorName || null,
     language: it.language || it["Language"] || null,
     region: it.region || it["Region"] || null,
     country: it.country || it["Country"] || null,
@@ -77,6 +81,11 @@ function pickFields(it){
     replies: it.replies || it["Replies"] || null,
     reposts: it.reposts || it["Reposts"] || null,
     comments: it.comments || it["Comments"] || null,
+
+    // Meltwater Smart Alerts extras
+    providerType: it.providerType || null,
+    statusLine: it.statusLine || null,
+    links: it.links || null,
   };
 
   return { title, url, source, publishedISO, mwId, mwPermalink, meta };
@@ -86,21 +95,24 @@ export default async function handler(req, res){
   try{
     if (req.method !== "POST") { res.status(405).send("Use POST"); return; }
 
+    // Shared-secret
     if (process.env.MW_WEBHOOK_SECRET) {
       const got = req.headers["x-mw-secret"];
       if (!got || got !== process.env.MW_WEBHOOK_SECRET) { res.status(401).send("bad secret"); return; }
     }
 
+    // Body & force switch
     const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
-const urlObj = new URL(req.url, "http://localhost");
-const forceParam = urlObj.searchParams.get("force");
-const force = (forceParam === "1" || forceParam === "true" || (body && body.force === true));
-    
+    const urlObj = new URL(req.url, "http://localhost");
+    const forceParam = urlObj.searchParams.get("force");
+    const force = (forceParam === "1" || forceParam === "true" || (body && body.force === true));
+
+    // Accept arrays, array wrappers, or single-object payloads
     const items = Array.isArray(body?.results) ? body.results
-               : Array.isArray(body?.items)   ? body.items
-               : body?.result ? [body.result]
-               : Array.isArray(body) ? body
-               : [];
+                : Array.isArray(body?.items)   ? body.items
+                : body?.result                 ? [body.result]
+                : Array.isArray(body)          ? body
+                : (body && typeof body === "object" ? [body] : []);
 
     let stored = 0;
 
@@ -110,15 +122,17 @@ const force = (forceParam === "1" || forceParam === "true" || (body && body.forc
       const canon = normalizeUrl(url || title);
       const ts = toEpoch(publishedISO);
 
+      // De-dupe unless 'force' is set
       if (!force) {
-  if (mwId) {
-    const first = await redis.sadd(SEEN_MW, String(mwId));
-    if (first !== 1) continue;
-  } else if (canon) {
-    const first = await redis.sadd(SEEN_URL, canon);
-    if (first !== 1) continue;
-  }
-}
+        if (mwId) {
+          const first = await redis.sadd(SEEN_MW, String(mwId));
+          if (first !== 1) continue;
+        } else if (canon) {
+          const first = await redis.sadd(SEEN_URL, canon);
+          if (first !== 1) continue;
+        }
+      }
+
       const mid = mwId ? `mw_${String(mwId)}` : idFromCanonical(canon || title);
 
       const mention = {
@@ -131,6 +145,7 @@ const force = (forceParam === "1" || forceParam === "true" || (body && body.forc
         matched: ["meltwater-alert"],
         published_ts: ts,
         published: new Date(ts * 1000).toISOString(),
+
         origin: "meltwater",
         provider: "Meltwater",
         provider_meta: {
@@ -138,9 +153,12 @@ const force = (forceParam === "1" || forceParam === "true" || (body && body.forc
           id: mwId,
           permalink: mwPermalink
         },
+
+        // Keep raw for future needs
         provider_raw: it
       };
 
+      // WRITE as JSON string scored by published_ts
       await redis.zadd(ZSET, { score: ts, member: JSON.stringify(mention) });
       stored++;
     }

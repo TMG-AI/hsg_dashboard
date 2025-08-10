@@ -137,7 +137,7 @@ export default async function handler(req, res){
         provider_raw: it
       };
 
-      await redis.zadd(ZSET, { score: ts, member: JSON.stringify(mention) });
+      await redis.zadd(ZSET, ts, JSON.stringify(mention));
       stored++;
     }
 

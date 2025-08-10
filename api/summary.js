@@ -6,21 +6,30 @@ function etBoundsToday() {
   const nowUtc = new Date();
   const etNow = new Date(nowUtc.toLocaleString("en-US", { timeZone: "America/New_York" }));
   const y = etNow.getFullYear(), m = etNow.getMonth(), d = etNow.getDate();
-  // offset between ET and UTC at this moment
-  const offsetMs = etNow.getTime() - nowUtc.getTime(); // -4h (DST) or -5h (STD)
+  const offsetMs = etNow.getTime() - nowUtc.getTime(); // ET–UTC offset at this moment
   const startUtcMs = Date.UTC(y, m, d) - offsetMs;     // midnight ET in UTC ms
   const endUtcMs = Date.now();                         // "so far"
   return { since: Math.floor(startUtcMs/1000), until: Math.floor(endUtcMs/1000) };
+}
+
+function windowToRange(win = "24h") {
+  const now = Math.floor(Date.now()/1000);
+  const w = String(win).toLowerCase();
+  if (w === "today" || w === "today_et") return etBoundsToday();
+  if (w === "7d") return { since: now - 7*24*3600, until: now };
+  if (w === "30d") return { since: now - 30*24*3600, until: now };
+  return { since: now - 24*3600, until: now }; // default 24h
 }
 
 export default async function handler(req, res){
   try{
     if (req.method !== "GET") { res.status(405).send("Use GET"); return; }
 
-    const { since, until } = etBoundsToday();
+    const win = req.query.window || "24h";
+    const { since, until } = windowToRange(win);
 
-    // Pull newest first (up to 1000), then filter by published_ts within ET "today"
-    const rows = await redis.zrange(ZSET, 0, 1000, { rev: true });
+    // Pull newest first (up to 2000), then filter by each item's published_ts
+    const rows = await redis.zrange(ZSET, 0, 2000, { rev: true });
 
     let total = 0;
     const byOrigin = { meltwater: 0, rss: 0, reddit: 0, x: 0, other: 0 };
@@ -71,7 +80,7 @@ export default async function handler(req, res){
 
     res.status(200).json({
       ok: true,
-      window: "today_ET",
+      window: String(win),
       totals: { all: total, by_origin: byOrigin },
       top_publishers,
       generated_at: new Date().toISOString()

@@ -57,8 +57,6 @@ const SECTION_RULES = {
   "99bitcoins.com": "Major Sources",
   "cryptopanic.com": "Aggregators",
   "bitcoinnews.com": "Specialized",
-  "youtube.com": "Social Media",
-  "youtu.be": "Social Media"
 };
 
 // ---- helpers ----

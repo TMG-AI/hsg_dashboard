@@ -14,7 +14,7 @@ export default async function handler(req, res) {
     const env_ok = Boolean(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
     const mw_secret_set = Boolean(process.env.MW_WEBHOOK_SECRET);
 
-    let zcount = 0;
+        let zcount = 0;
     let latest = null;
     let redis_ok = false;
 

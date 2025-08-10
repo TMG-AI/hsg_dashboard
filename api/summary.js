@@ -6,19 +6,27 @@ function etBoundsToday() {
   const nowUtc = new Date();
   const etNow = new Date(nowUtc.toLocaleString("en-US", { timeZone: "America/New_York" }));
   const y = etNow.getFullYear(), m = etNow.getMonth(), d = etNow.getDate();
-  const offsetMs = etNow.getTime() - nowUtc.getTime(); // ET–UTC offset at this moment
-  const startUtcMs = Date.UTC(y, m, d) - offsetMs;     // midnight ET in UTC ms
-  const endUtcMs = Date.now();                         // "so far"
-  return { since: Math.floor(startUtcMs/1000), until: Math.floor(endUtcMs/1000) };
+  const offsetMs = etNow.getTime() - nowUtc.getTime();      // -4h/-5h
+  const startUtcMs = Date.UTC(y, m, d) - offsetMs;          // midnight ET in UTC
+  return { since: Math.floor(startUtcMs/1000), until: Math.floor(Date.now()/1000) };
 }
 
 function windowToRange(win = "24h") {
   const now = Math.floor(Date.now()/1000);
   const w = String(win).toLowerCase();
   if (w === "today" || w === "today_et") return etBoundsToday();
-  if (w === "7d") return { since: now - 7*24*3600, until: now };
+  if (w === "7d")  return { since: now - 7*24*3600,  until: now };
   if (w === "30d") return { since: now - 30*24*3600, until: now };
-  return { since: now - 24*3600, until: now }; // default 24h
+  return { since: now - 24*3600, until: now };
+}
+
+function parseMember(member) {
+  if (member == null) return null;
+  if (typeof member === "object") return member;         // already an object (Upstash sometimes does this)
+  if (typeof member === "string") {
+    try { return JSON.parse(member); } catch { return null; }
+  }
+  try { return JSON.parse(String(member)); } catch { return null; }
 }
 
 export default async function handler(req, res){
@@ -37,14 +45,13 @@ export default async function handler(req, res){
     const articlesByPublisher = {};
 
     for (const member of rows) {
-      let m;
-      try { m = JSON.parse(typeof member === "string" ? member : String(member)); }
-      catch { continue; }
+      const m = parseMember(member);
+      if (!m) continue;
 
-      const ts = Number(m?.published_ts || 0);
+      const ts = Number(m.published_ts ?? 0);
       if (!Number.isFinite(ts) || ts < since || ts > until) continue;
 
-      const origin = (m.origin || "").toLowerCase();
+      const origin = String(m.origin || "").toLowerCase();
       total++;
       if (byOrigin[origin] === undefined) byOrigin.other++;
       else byOrigin[origin]++;

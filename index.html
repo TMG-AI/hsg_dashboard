@@ -75,6 +75,9 @@
 <!-- BEGIN: Top Outlets (24h) -->
 <div id="top-outlets" style="max-width:1120px;margin:0 auto 20px auto;font-family:system-ui,Arial,sans-serif"></div>
 <!-- END: Top Outlets (24h) -->
+  <!-- BEGIN: Latest Meltwater (24h) -->
+<div id="latest-mw" style="max-width:1120px;margin:0 auto 24px auto;font-family:system-ui,Arial,sans-serif"></div>
+<!-- END: Latest Meltwater (24h) -->
 
   <header>
     <div class="header-content">
@@ -336,6 +339,38 @@
 
     wrap.innerHTML = html;
   } catch(e) {
+    // no-op
+  }
+})();
+</script>
+<script>
+(async function(){
+  try{
+    const res = await fetch('/api/list?origin=meltwater&window=24h&limit=50', { cache: 'no-store' });
+    const data = await res.json();
+    if (!data?.ok) return;
+    const wrap = document.getElementById('latest-mw');
+    if (!wrap) return;
+
+    if (!data.items?.length) { wrap.innerHTML = ''; return; }
+
+    let html = '<div style="margin:8px 0 12px 0;font-size:18px;font-weight:600;">Latest Meltwater (24h)</div>';
+    html += '<ul style="padding-left:18px;margin:0;">';
+
+    data.items.forEach((m) => {
+      const t = m.title || '(untitled)';
+      const reach = (typeof m.reach === 'number') ? ' <span style="font-size:12px;opacity:.7;">(reach ' + (m.reach.toLocaleString ? m.reach.toLocaleString() : m.reach) + ')</span>' : '';
+      const src = m.source ? ' <span style="font-size:12px;opacity:.7;">[' + m.source + ']</span>' : '';
+      if (m.link) {
+        html += '<li style="margin:6px 0;"><a href="' + m.link + '" target="_blank" rel="noreferrer" style="text-decoration:underline;">' + t + '</a>' + src + reach + '</li>';
+      } else {
+        html += '<li style="margin:6px 0;">' + t + src + reach + '</li>';
+      }
+    });
+
+    html += '</ul>';
+    wrap.innerHTML = html;
+  }catch(e){
     // no-op
   }
 })();

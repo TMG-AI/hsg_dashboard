@@ -36,17 +36,50 @@ function isMock(m){
 }
 
 // *** Replace-only block: origin detection ***
+// Put this line immediately ABOVE detectOrigin()
+const GA_SOURCES = new Set([
+  // Domains you see appearing ONLY via Google Alerts
+  "wsj.com", "www.wsj.com",
+  "barrons.com", "www.barrons.com",
+]);
+
+// Replace your entire detectOrigin() with this:
 function detectOrigin(m){
-  // 1) Keep explicit origin if the item has it
+  // 1) Keep explicit origin if present
   if (m && m.origin) return m.origin;
 
-  // 2) Meltwater: several independent hints
+  // 2) Meltwater: multiple hints
   const sec  = (m?.section  || "").toLowerCase();
   const prov = (m?.provider || "").toLowerCase();
   const tags = Array.isArray(m?.matched) ? m.matched.map(x => String(x).toLowerCase()) : [];
   if (sec === "meltwater" || prov === "meltwater" || tags.includes("meltwater-alert")) {
     return "meltwater";
   }
+
+  // 3) Google Alerts: URL patterns or known GA-only publishers
+  try {
+    const u = m?.link ? new URL(m.link) : null;
+    const host = u ? u.hostname.toLowerCase() : "";
+    if (/(^|\.)news\.google\./.test(host)) return "google_alerts";
+    if (/(^|\.)feedproxy\.google\./.test(host)) return "google_alerts";
+    if (host === "www.google.com") {
+      const q = u.search || "";
+      if (q.includes("ct=ga") || q.includes("tbm=nws")) return "google_alerts";
+    }
+    if (GA_SOURCES.has(host)) return "google_alerts";
+  } catch {}
+
+  // Also classify by source text if present
+  const src = (m?.source || "").toLowerCase();
+  if (src.includes("google alerts") || src === "google") return "google_alerts";
+
+  // 4) Optional social buckets (only if your items use them)
+  if (sec === "reddit" || src === "reddit") return "reddit";
+  if (sec === "x" || src === "x" || src === "twitter") return "x";
+
+  // 5) Default
+  return "rss";
+}
 
   // 3) Google Alerts: URL patterns and common labels
   try {

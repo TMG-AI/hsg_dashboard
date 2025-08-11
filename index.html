@@ -295,6 +295,54 @@
   </script>
 
 
+<script>
+/* Hide mock/test cards on the page only (no backend changes) */
+(function(){
+  const BAD_TITLE_PARTS = [
+    'forced write test',
+    'mw clamp test',
+    'sanity write',
+    'browser → n8n test',
+    'browser -> n8n test',
+    'debug write'
+  ];
+  const BAD_SOURCES = ['example news','debug source'];
+  const BAD_LINK_PARTS = ['example.com'];
 
+  function isTestCard(card){
+    const title = (card.querySelector('.card-title')?.innerText || '').toLowerCase().trim();
+    const meta  = (card.querySelector('.meta')?.innerText || '').toLowerCase();
+    const link  = (card.querySelector('.card-title a')?.href || '').toLowerCase();
+
+    // title checks
+    if (BAD_TITLE_PARTS.some(p => title.includes(p))) return true;
+
+    // special: hide "Coinbase headline" only when the source is Example News
+    if (title.includes('coinbase headline') && meta.includes('example news')) return true;
+
+    // source / link checks
+    if (BAD_SOURCES.some(s => meta.includes(s))) return true;
+    if (BAD_LINK_PARTS.some(p => link.includes(p))) return true;
+
+    return false;
+  }
+
+  function purge(){
+    document.querySelectorAll('#list .card').forEach(card => {
+      if (isTestCard(card)) card.remove();
+    });
+  }
+
+  // Run now and whenever the list updates
+  const list = document.getElementById('list');
+  if (list){
+    purge();
+    new MutationObserver(purge).observe(list, { childList: true });
+  } else {
+    // Fallback: run shortly after load if #list is created later
+    document.addEventListener('DOMContentLoaded', () => setTimeout(purge, 800));
+  }
+})();
+</script>
 </body>
 </html>

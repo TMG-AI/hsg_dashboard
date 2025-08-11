@@ -1,10 +1,4 @@
-import { Redis } from "@upstash/redis";
-
-const redis = new Redis({
-  url: process.env.KV_REST_API_URL,
-  token: process.env.KV_REST_API_TOKEN
-});
-const ZSET = "mentions:z";
+import { NextResponse } from "next/server"; // safe if unused in your setup; ignored otherwise
 
 function startOfTodayET(){
   const now = new Date();
@@ -15,8 +9,6 @@ function startOfTodayET(){
   const iso = `${parts.year}-${parts.month}-${parts.day}T00:00:00-04:00`; // EDT
   return Math.floor(new Date(iso).getTime()/1000);
 }
-
-const safeParse = (s) => { try { return JSON.parse(s); } catch { return null; } };
 
 function toTs(m){
   if (m && m.published_ts != null) {
@@ -34,7 +26,6 @@ function detectOrigin(m){
   try {
     const u = m.link ? new URL(m.link) : null;
     const host = u ? u.hostname.toLowerCase() : "";
-    // Google Alerts patterns
     if (/(^|\.)news\.google\./.test(host)) return "google_alerts";
     if (/(^|\.)feedproxy\.google\./.test(host)) return "google_alerts";
     if (host === "www.google.com" && (u.search||"").includes("ct=ga")) return "google_alerts";
@@ -59,29 +50,33 @@ function isMock(m){
 
 export default async function handler(req, res){
   try{
+    // Build absolute URL to your own get_mentions endpoint
+    const host = req.headers.host;
+    const url  = `https://${host}/api/get_mentions?limit=1000&nocache=1`;
+
+    const r = await fetch(url, { cache: "no-store" });
+    if (!r.ok) {
+      res.status(502).json({ ok:false, error:`get_mentions ${r.status}` });
+      return;
+    }
+    const data = await r.json();
+    const list = Array.isArray(data) ? data : [];
+
     const startToday = startOfTodayET();
 
-    // ✅ Get newest members by index (independent of their scores)
-    const LOOKBACK = 3000; // increase if needed
-    const raw = await redis.zrange(ZSET, 0, LOOKBACK-1, { rev: true });
-    const all = raw.map(safeParse).filter(Boolean);
-
-    // Only today's items, by each item's own timestamp
-    const today = all.filter(m => toTs(m) >= startToday);
-
-    // Drop known test items
-    const clean = today.filter(m => !isMock(m));
+    // Keep today's, drop test items
+    const today = list.filter(m => toTs(m) >= startToday && !isMock(m));
 
     // Tally by origin
     const by_origin = { meltwater:0, google_alerts:0, rss:0, reddit:0, x:0, other:0 };
-    for (const m of clean){
+    for (const m of today){
       const o = detectOrigin(m);
       if (by_origin[o] == null) by_origin.other++; else by_origin[o]++;
     }
 
-    // Top publishers (Meltwater) by reach if present
+    // Top publishers (Meltwater only), by optional reach
     const pubs = new Map();
-    for (const m of clean){
+    for (const m of today){
       if (detectOrigin(m) !== "meltwater") continue;
       const pub = m.source || "Unknown";
       const reach = Number(m?.provider_meta?.reach ?? m?.meta?.reach ?? 0) || 0;
@@ -99,7 +94,7 @@ export default async function handler(req, res){
     res.status(200).json({
       ok: true,
       window: "today",
-      totals: { all: clean.length, by_origin },
+      totals: { all: today.length, by_origin },
       top_publishers,
       generated_at: new Date().toISOString()
     });

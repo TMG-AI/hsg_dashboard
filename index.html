@@ -6,67 +6,44 @@
   <title>Coinbase Monitoring Dashboard</title>
   <style>
     *{box-sizing:border-box}
-    body{font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;margin:0;background:linear-gradient(135deg,#f8fffe 0%,#f1f8f6 100%);min-height:100vh;color:#1a1a1a}
-    header{background:linear-gradient(135deg,#4a6741 0%,#5a7c50 100%);color:#fff;padding:24px 32px;box-shadow:0 4px 20px rgba(74,103,65,.15);position:relative;overflow:hidden}
-    header::before{content:'';position:absolute;inset:0;background:url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M 10 0 L 0 0 0 10" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="0.5"/></pattern></defs><rect width="100" height="100" fill="url(%23grid)"/></svg>')}
+    body{
+      font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;
+      margin:0;
+      background:linear-gradient(135deg,#f8fffe 0%,#f1f8f6 100%);
+      min-height:100vh;color:#1a1a1a
+    }
+    header{
+      background:linear-gradient(135deg,#4a6741 0%,#5a7c50 100%);
+      color:#fff;padding:24px 32px;box-shadow:0 4px 20px rgba(74,103,65,.15);
+      position:relative;overflow:hidden
+    }
+    header::before{
+      content:'';position:absolute;inset:0;
+      background:url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M 10 0 L 0 0 0 10" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="0.5"/></pattern></defs><rect width="100" height="100" fill="url(%23grid)"/></svg>')
+    }
     .header-content{position:relative;z-index:1}
     .header-title{margin:0;font-size:28px;font-weight:600;letter-spacing:-.02em}
     .header-subtitle{color:rgba(255,255,255,.8);font-size:14px;margin:4px 0 0 0;font-weight:400}
-    
-    /* Enhanced Summary Bar Styles */
-    .summary-section {
-      background: #fff;
-      margin: 20px auto;
-      max-width: 1200px;
-      border-radius: 16px;
-      box-shadow: 0 4px 20px rgba(0,0,0,.08);
-      border: 1px solid rgba(139,195,74,.2);
-      overflow: hidden;
+
+    /* Summary Bar */
+    .summary-section{
+      background:#fff;margin:20px auto;max-width:1200px;border-radius:16px;
+      box-shadow:0 4px 20px rgba(0,0,0,.08);border:1px solid rgba(139,195,74,.2);overflow:hidden
     }
-    
-    .summary-grid {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 20px;
-      background: transparent;
-      padding: 20px;
+    .summary-grid{
+      display:grid;grid-template-columns:repeat(6,1fr);gap:20px;background:transparent;padding:20px
     }
-    
-    .-item {
-      background: #fff;
-      border-radius: 16px;
-      padding: 24px;
-      box-shadow: 0 4px 20px rgba(0,0,0,.08);
-      border: 1px solid rgba(139,195,74,.2);
-      transition: all 0.3s ease;
-      text-align: center;
+    .summary-item{
+      background:#fff;border-radius:16px;padding:24px;box-shadow:0 4px 20px rgba(0,0,0,.08);
+      border:1px solid rgba(139,195,74,.2);transition:.3s;text-align:center
     }
-    
-    .-item:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 8px 30px rgba(0,0,0,.12);
-      border-color: rgba(139,195,74,.4);
-    }
-    
-    .-label {
-      color: #333;
-      font-size: 16px;
-      font-weight: 700;
-      margin-bottom: 16px;
-      text-transform: uppercase;
-      letter-spacing: 0.8px;
-    }
-    
-    .-value {
-      font-size: 32px;
-      font-weight: 700;
-      color: #4a6741;
-      margin: 0;
-    }
+    .summary-item:hover{transform:translateY(-2px);box-shadow:0 8px 30px rgba(0,0,0,.12);border-color:rgba(139,195,74,.4)}
+    .summary-label{color:#333;font-size:16px;font-weight:700;margin-bottom:16px;text-transform:uppercase;letter-spacing:.8px}
+    .summary-value{font-size:32px;font-weight:700;color:#4a6741;margin:0}
 
     .wrap{max-width:1200px;margin:0 auto;padding:32px 24px}
     .controls{display:flex;gap:8px;align-items:center;margin:18px 0 6px 0;flex-wrap:wrap}
-    select,input{padding:10px 12px;border-radius:10px;border:1px solid #d9e1ec}
+    input{padding:10px 12px;border-radius:10px;border:1px solid #d9e1ec}
     .section-title{font-size:20px;font-weight:700;color:#1a1a1a;margin:18px 0 10px 0;display:flex;align-items:center;gap:12px}
     .section-title::before{content:'';width:4px;height:20px;background:linear-gradient(135deg,#8bc34a,#7cb342);border-radius:2px}
     .articles-container{display:grid;gap:20px}
@@ -100,54 +77,23 @@
     .skeleton-chip{height:24px;width:60px;display:inline-block;margin-right:8px}
     @media (max-width:768px){
       .wrap{padding:20px 16px}
-      .-grid{grid-template-columns:repeat(2, 1fr)}
       .meta{flex-direction:column;align-items:flex-start;gap:8px}
+      .summary-grid{grid-template-columns:repeat(2,1fr)}
     }
-    .refresh-news-btn {
-  background: linear-gradient(135deg, #4a6741 0%, #5a7c50 100%);
-  color: #fff;
-  border: none;
-  padding: 10px 20px;
-  border-radius: 10px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  font-size: 14px;
-  margin-left: 12px;
-}
 
-.refresh-news-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(74, 103, 65, 0.3);
-}
-
-.refresh-news-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-  transform: none;
-}
-
-.refresh-news-btn.loading {
-  opacity: 0.8;
-}
+    .refresh-news-btn{
+      background:linear-gradient(135deg,#4a6741 0%,#5a7c50 100%);
+      color:#fff;border:none;padding:10px 20px;border-radius:10px;font-weight:600;cursor:pointer;transition:.3s;font-size:14px;margin-left:12px
+    }
+    .refresh-news-btn:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(74,103,65,.3)}
+    .refresh-news-btn:disabled{opacity:.6;cursor:not-allowed;transform:none}
+    .refresh-news-btn.loading{opacity:.8}
   </style>
 </head>
 <body>
-  <!-- BEGIN: Summary Bar -->
-<div id="summary-bar" style="max-width:1120px;margin:20px auto;padding:12px;border:1px solid #e5e7eb;border-radius:12px;font-family:system-ui,Arial,sans-serif">
-  <div style="display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;">
-    <div><div style="font-size:12px;opacity:.7">Total (Today)</div><div id="sb-total" style="font-size:22px;font-weight:600">—</div></div>
-    <div><div style="font-size:12px;opacity:.7">Google Alerts</div><div id="sb-ga" style="font-size:22px;font-weight:600">—</div></div>
-    <div><div style="font-size:12px;opacity:.7">Meltwater</div><div id="sb-mw" style="font-size:22px;font-weight:600">—</div></div>
-    <div><div style="font-size:12px;opacity:.7">RSS Feeds</div><div id="sb-rss" style="font-size:22px;font-weight:600">—</div></div>
-    <div><div style="font-size:12px;opacity:.7">Reddit (MW)</div><div id="sb-reddit" style="font-size:22px;font-weight:600">—</div></div>
-    <div><div style="font-size:12px;opacity:.7">Twitter/X (MW)</div><div id="sb-x" style="font-size:22px;font-weight:600">—</div></div>
-  </div>
-</div>
-<!-- END: Summary Bar -->
 
-<!-- Top Outlets (Today) container; created if missing by script too -->
-<div id="top-outlets" style="max-width:1120px;margin:0 auto 20px auto;font-family:system-ui,Arial,sans-serif"></div>
+  <!-- Top Outlets (Today) container -->
+  <div id="top-outlets" style="max-width:1120px;margin:0 auto 20px auto;font-family:system-ui,Arial,sans-serif"></div>
 
   <header>
     <div class="header-content">
@@ -156,67 +102,48 @@
     </div>
   </header>
 
-  <!-- Enhanced Summary Bar -->
+  <!-- Summary Bar (Today only) -->
   <div class="summary-section">
     <div class="summary-grid">
       <div class="summary-item">
-        <div class="summary-label">Last 24 Hours</div>
-        <div class="summary-value" id="sb-last24">—</div>
-      </div>
-      <div class="summary-item">
-        <div class="summary-label">Total</div>
+        <div class="summary-label">Total (Today)</div>
         <div class="summary-value" id="sb-total">—</div>
       </div>
       <div class="summary-item">
-        <div class="summary-label">Active Sources</div>
-        <div class="summary-value" id="sb-sources">—</div>
+        <div class="summary-label">Google Alerts</div>
+        <div class="summary-value" id="sb-ga">—</div>
       </div>
       <div class="summary-item">
         <div class="summary-label">Meltwater</div>
         <div class="summary-value" id="sb-mw">—</div>
       </div>
       <div class="summary-item">
-        <div class="summary-label">Google Alerts</div>
-        <div class="summary-value" id="sb-google">—</div>
-      </div>
-      <div class="summary-item">
         <div class="summary-label">RSS Feeds</div>
         <div class="summary-value" id="sb-rss">—</div>
       </div>
       <div class="summary-item">
-        <div class="summary-label">Twitter/X</div>
-        <div class="summary-value" id="sb-x">—</div>
+        <div class="summary-label">Reddit (MW)</div>
+        <div class="summary-value" id="sb-reddit">—</div>
       </div>
       <div class="summary-item">
-        <div class="summary-label">Reddit</div>
-        <div class="summary-value" id="sb-reddit">—</div>
+        <div class="summary-label">Twitter/X (MW)</div>
+        <div class="summary-value" id="sb-x">—</div>
       </div>
     </div>
   </div>
 
   <div class="wrap">
     <div class="controls">
-      <label for="section">Section</label>
-      <select id="section">
-        <option value="">All</option>
-        <option>Top Crypto News</option>
-        <option>Major Sources</option>
-        <option>Aggregators</option>
-        <option>Specialized</option>
-        <option>Other</option>
-      </select>
       <label for="search">Search</label>
       <input id="search" placeholder="Filter title…"/>
       <button id="refresh-news-btn" class="refresh-news-btn">
-  <span id="refresh-btn-text">Get Latest News</span>
-</button>
-      
+        <span id="refresh-btn-text">Get Latest News</span>
+      </button>
     </div>
 
     <div id="err"></div>
     <h2 class="section-title">Recent Mentions</h2>
     <div id="loading" class="loading" style="display:none">Loading mentions...</div>
-
     <div id="list" class="articles-container"></div>
   </div>
 
@@ -250,10 +177,6 @@
       loadingSkeletons=[];
     }
 
-    function updateStats(data){
-      // This function is kept for compatibility but stats are now handled in the summary section
-    }
-
     function formatDate(s){
       const d=new Date(s);
       return d.toLocaleString('en-US',{year:'numeric',month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit',hour12:true});
@@ -280,40 +203,25 @@
       });
     }
 
-    function groupBySection(items){
-      const order=["Top Crypto News","Major Sources","Aggregators","Specialized","Other"];
-      const map=new Map(order.map(s=>[s,[]]));
-      for (const m of items){
-        const sec = m.section || "Other";
-        if (!map.has(sec)) map.set(sec, []);
-        map.get(sec).push(m);
-      }
-      return { order, map };
-    }
-
     async function loadMentions(){
       try{
         document.getElementById('err').style.display='none';
         showLoadingSkeletons(5);
 
-        const section=document.getElementById('section').value;
         const search=(document.getElementById('search').value||'').trim().toLowerCase();
 
         const qs=new URLSearchParams();
         qs.set('limit','300');
-        if (section) qs.set('section', section);
 
-        const r=await fetch('/api/get_mentions?'+qs.toString());
+        const r=await fetch('/api/get_mentions?'+qs.toString(), { cache:'no-store' });
         if (!r.ok) throw new Error('HTTP '+r.status);
         const data=await r.json();
 
-        // text filter
-        const filtered = search ? data.filter(m => (m.title||"").toLowerCase().includes(search)) : data;
-
-        // Sort by date/time - newest first
+        // filter + sort newest → oldest
+        let filtered = Array.isArray(data) ? data : [];
+        if (search) filtered = filtered.filter(m => (m.title||"").toLowerCase().includes(search));
         filtered.sort((a, b) => new Date(b.published) - new Date(a.published));
 
-        updateStats(filtered);
         removeLoadingSkeletons();
 
         const list=document.getElementById('list');
@@ -324,41 +232,15 @@
             <div class="empty-state">
               <div class="empty-state-icon">📊</div>
               <h3>No mentions for this view</h3>
-              <p>Try another section or refresh the data.</p>
+              <p>Try searching for a different term or refresh.</p>
               <button class="refresh-btn" onclick="loadMentions()">Refresh Data</button>
             </div>`;
           return;
         }
 
-        // Group by section and render each group with a header
-        const { order, map } = groupBySection(filtered);
-        let sectionCount = 0;
-        for (const sec of order){
-          const items = map.get(sec) || [];
-          if (!items.length) continue;
-          sectionCount++;
-
-          const h = document.createElement('h3');
-          h.className='section-title';
-          h.textContent = sec;
-          list.appendChild(h);
-
-          for (let i=0;i<items.length;i++){
-            await addArticleCard(list, items[i], i*0.05);
-          }
+        for (let i=0;i<filtered.length;i++){
+          await addArticleCard(list, filtered[i], i*0.05);
         }
-
-        // If a custom/unknown section exists, render it at the end
-        for (const [sec, items] of map){
-          if (order.includes(sec)) continue;
-          if (!items.length) continue;
-          const h=document.createElement('h3'); h.className='section-title'; h.textContent=sec;
-          list.appendChild(h);
-          for (let i=0;i<items.length;i++){
-            await addArticleCard(list, items[i], i*0.05);
-          }
-        }
-
       }catch(e){
         removeLoadingSkeletons();
         const el=document.getElementById('err'); el.style.display='block';
@@ -367,280 +249,124 @@
       }
     }
 
-    document.getElementById('section').addEventListener('change', loadMentions);
     document.getElementById('search').addEventListener('input', ()=>{
       clearTimeout(window._t); window._t=setTimeout(loadMentions,250);
     });
     document.getElementById('refresh-news-btn').addEventListener('click', async () => {
-  const btn = document.getElementById('refresh-news-btn');
-  const btnText = document.getElementById('refresh-btn-text');
-  
-  // Disable button and show loading state
-  btn.disabled = true;
-  btn.classList.add('loading');
-  btnText.textContent = 'Loading...';
-  
-  try {
-    await loadMentions();
-    btnText.textContent = 'Updated!';
-    setTimeout(() => {
-      btnText.textContent = 'Get Latest News';
-    }, 2000);
-  } catch (error) {
-    btnText.textContent = 'Error - Try Again';
-    setTimeout(() => {
-      btnText.textContent = 'Get Latest News';
-    }, 3000);
-  } finally {
-    btn.disabled = false;
-    btn.classList.remove('loading');
-  }
-});
+      const btn = document.getElementById('refresh-news-btn');
+      const btnText = document.getElementById('refresh-btn-text');
+      btn.disabled = true; btn.classList.add('loading'); btnText.textContent = 'Loading...';
+      try {
+        await loadMentions();
+        btnText.textContent = 'Updated!';
+        setTimeout(() => { btnText.textContent = 'Get Latest News'; }, 2000);
+      } catch (error) {
+        btnText.textContent = 'Error - Try Again';
+        setTimeout(() => { btnText.textContent = 'Get Latest News'; }, 3000);
+      } finally {
+        btn.disabled = false; btn.classList.remove('loading');
+      }
+    });
 
     loadMentions();
-    setInterval(loadMentions, 1*60*1000);
+    setInterval(loadMentions, 60*1000);
   </script>
-  
+
+  <!-- Summary + Top Outlets (Today) -->
   <script>
-(async function(){
-  try{
-    fetch('/api/summary?window=today', { cache: 'no-store' });
-    const data = await res.json();
-    if (!data?.ok) return;
-
-    const fmt = (n) => (typeof n === 'number' && Number.isFinite(n) && n.toLocaleString) ? n.toLocaleString() : (n ?? '0');
-    const by = (data.totals && data.totals.by_origin) ? data.totals.by_origin : {};
-
-    const setText = (id, val) => {
-      const el = document.getElementById(id);
-      if (el) el.textContent = fmt(val);
-    };
-
-    setText('sb-last24', data.totals?.all);
-    setText('sb-total', data.totals?.all);
-    setText('sb-sources', Object.keys(by).length || 0);
-    setText('sb-mw',    by.meltwater);
-    setText('sb-google', by.google_alerts || by.google || 0);
-    setText('sb-rss',   by.rss);
-    setText('sb-x',     by.x);
-    setText('sb-reddit',by.reddit);
-  } catch(e) {
-    console.error('Error loading summary:', e);
-  }
-})();
-</script>
-<script>
-(async function(){
-  // Ensure a container exists (creates one if missing)
-  function ensureContainer(){
-    let el = document.getElementById('latest-mw');
-    if (el) return el;
-    el = document.createElement('div');
-    el.id = 'latest-mw';
-    el.style.cssText = 'max-width:1120px;margin:0 auto 24px auto;font-family:system-ui,Arial,sans-serif';
-    const after = document.getElementById('top-outlets');
-    if (after && after.parentNode) after.insertAdjacentElement('afterend', el);
-    else document.body.appendChild(el);
-    return el;
-  }
-
-  const wrap = ensureContainer();
-  wrap.innerHTML = '<div style="opacity:.7">Loading Meltwater (today)…</div>';
-
-  try{
-    const res = await fetch('/api/list?origin=meltwater&window=today&limit=100', { cache: 'no-store' });
-    const data = await res.json();
-    if (!data?.ok || !Array.isArray(data.items) || data.items.length === 0) {
-      wrap.innerHTML = '';
-      return;
-    }
-
-    let html = '<div style="margin:8px 0 12px 0;font-size:18px;font-weight:600;">Latest Meltwater (today)</div>';
-    html += '<ul style="padding-left:18px;margin:0;">';
-
-    data.items.forEach((m) => {
-      const t = m.title || '(untitled)';
-      const src = m.source ? ' <span style="font-size:12px;opacity:.7;">[' + m.source + ']</span>' : '';
-      const reach = (typeof m.reach === 'number')
-        ? ' <span style="font-size:12px;opacity:.7;">(reach ' + (m.reach.toLocaleString ? m.reach.toLocaleString() : m.reach) + ')</span>'
-        : '';
-      if (m.link) {
-        html += '<li style="margin:6px 0;"><a href="' + m.link + '" target="_blank" rel="noreferrer" style="text-decoration:underline;">' + t + '</a>' + src + reach + '</li>';
-      } else {
-        html += '<li style="margin:6px 0;">' + t + src + reach + '</li>';
-      }
-    });
-
-    html += '</ul>';
-    wrap.innerHTML = html;
-  }catch(e){
-    wrap.innerHTML = '';
-  }
-})();
-</script>
-<script>
-(function(){
-  // 0) Remove any "Section" dropdowns
-  try {
-    // remove selects with id/name/class containing "section"
-    document.querySelectorAll('select').forEach(sel => {
-      const id = (sel.id||'').toLowerCase();
-      const nm = (sel.name||'').toLowerCase();
-      const cls = (sel.className||'').toLowerCase();
-      if (id.includes('section') || nm.includes('section') || cls.includes('section')) {
-        sel.closest('*').remove();
-      }
-    });
-    // remove a label that literally says "Section" with an adjacent select
-    document.querySelectorAll('label').forEach(lab => {
-      if ((lab.textContent||'').trim().toLowerCase() === 'section') {
-        const box = lab.closest('*');
-        if (box) box.remove();
-      }
-    });
-  } catch(_) {}
-
-  // 1) Ensure container
-  function ensureAllArticles(){
-    let el = document.getElementById('all-articles');
-    if (el) return el;
-    el = document.createElement('div');
-    el.id = 'all-articles';
-    el.style.cssText = 'max-width:1120px;margin:0 auto 24px auto;font-family:system-ui,Arial,sans-serif';
-    // insert after Top Outlets if present, else at end of body
-    const after = document.getElementById('top-outlets');
-    if (after && after.parentNode) after.insertAdjacentElement('afterend', el);
-    else document.body.appendChild(el);
-    return el;
-  }
-
-  const wrap = ensureAllArticles();
-
-  // 2) Controls (Search + Refresh)
-  wrap.innerHTML = `
-    <div style="display:flex;gap:8px;align-items:center;margin:8px 0 12px 0;">
-      <div style="font-size:18px;font-weight:600;flex:0 0 auto;">All Articles (today, newest first)</div>
-      <div style="flex:1 1 auto;"></div>
-      <input id="aa-search" placeholder="Search title or source…" style="flex:0 0 320px;max-width:50vw;padding:8px 10px;border:1px solid #e5e7eb;border-radius:10px;" />
-      <button id="aa-refresh" style="padding:8px 12px;border:1px solid #e5e7eb;border-radius:10px;background:#f8fafc;cursor:pointer;">Refresh</button>
-    </div>
-    <div id="aa-status" style="font-size:12px;opacity:.7;margin-bottom:6px;"></div>
-    <ul id="aa-list" style="padding-left:18px;margin:0;"></ul>
-  `;
-
-  const elSearch  = document.getElementById('aa-search');
-  const elRefresh = document.getElementById('aa-refresh');
-  const elList    = document.getElementById('aa-list');
-  const elStatus  = document.getElementById('aa-status');
-
-  let allItems = [];
-
-  // 3) Helpers
-  function fmtET(ts){
-    if (!ts || !Number.isFinite(ts)) return '';
-    try {
-      const d = new Date(ts*1000);
-      return d.toLocaleString('en-US', { timeZone: 'America/New_York', year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
-    } catch { return ''; }
-  }
-  function render(list){
-    elList.innerHTML = '';
-    list.forEach(m => {
-      const t = m.title || '(untitled)';
-      const src = m.source ? ` <span style="font-size:12px;opacity:.7;">[${m.source}]</span>` : '';
-      const when = m.published_ts ? ` <span style="font-size:12px;opacity:.7;">${fmtET(m.published_ts)} ET</span>` : '';
-      const li = document.createElement('li');
-      li.style.margin = '6px 0';
-      if (m.link) {
-        li.innerHTML = `<a href="${m.link}" target="_blank" rel="noreferrer" style="text-decoration:underline;">${t}</a>${src}${when}`;
-      } else {
-        li.innerHTML = `${t}${src}${when}`;
-      }
-      elList.appendChild(li);
-    });
-    elStatus.textContent = `${list.length} shown`;
-  }
-  function applySearch(){
-    const q = (elSearch.value||'').toLowerCase().trim();
-    if (!q) { render(allItems); return; }
-    const filtered = allItems.filter(m => (m.title||'').toLowerCase().includes(q) || (m.source||'').toLowerCase().includes(q));
-    render(filtered);
-  }
-
-  // 4) Load (today, all origins), sort newest first
-  async function load(){
-    elStatus.textContent = 'Loading…';
+  (async function(){
     try{
-      const res = await fetch('/api/list?origin=all&window=today&limit=500', { cache: 'no-store' });
+      const res = await fetch('/api/summary?window=today', { cache: 'no-store' });
       const data = await res.json();
-      const items = Array.isArray(data?.items) ? data.items : [];
-      // sort by published_ts desc
-      items.sort((a,b) => (b.published_ts||0) - (a.published_ts||0));
-      allItems = items;
-      applySearch();
-    }catch{
-      elStatus.textContent = 'Failed to load.';
-      elList.innerHTML = '';
+      if (!data?.ok) return;
+
+      const by = (data.totals && data.totals.by_origin) ? data.totals.by_origin : {};
+      const fmt = (n) => (typeof n === 'number' && Number.isFinite(n) && n.toLocaleString) ? n.toLocaleString() : (n ?? '0');
+      const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = fmt(val); };
+
+      setText('sb-total',  data.totals?.all);
+      setText('sb-ga',     by.google_alerts || by.google || 0);
+      setText('sb-mw',     by.meltwater || 0);
+      setText('sb-rss',    by.rss || 0);
+      setText('sb-reddit', by.reddit || 0);
+      setText('sb-x',      by.x || 0);
+
+      // Top Outlets list
+      const wrap = document.getElementById('top-outlets');
+      if (!wrap) return;
+      const pubs = data.top_publishers || [];
+      if (!pubs.length) { wrap.innerHTML = ''; return; }
+
+      let html = '<div style="margin:8px 0 12px 0;font-size:18px;font-weight:600;">Top Outlets (Today)</div>';
+      pubs.forEach((p) => {
+        const reach = fmt(p.total_reach ?? 0);
+        html += '<div style="border:1px solid #e5e7eb;border-radius:12px;padding:12px;margin-bottom:12px;">'
+             +    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">'
+             +      '<div style="font-weight:600;">' + (p.publisher || 'Unknown') + '</div>'
+             +      '<div style="font-size:12px;opacity:.7;">Reach: ' + reach + '</div>'
+             +    '</div>'
+             +    '<ul style="padding-left:18px;margin:0;">';
+        (p.articles || []).forEach((a) => {
+          const title = a.title || '(untitled)';
+          const reachTxt = (typeof a.reach === 'number') ? ' <span style="font-size:12px;opacity:.7;">(reach ' + fmt(a.reach) + ')</span>' : '';
+          if (a.link) {
+            html += '<li style="margin:6px 0;"><a href="' + a.link + '" target="_blank" rel="noreferrer" style="text-decoration:underline;">' + title + '</a>' + reachTxt + '</li>';
+          } else {
+            html += '<li style="margin:6px 0;">' + title + reachTxt + '</li>';
+          }
+        });
+        html +=   '</ul></div>';
+      });
+      wrap.innerHTML = html;
+    } catch(e) {
+      console.error('Error loading summary/top outlets:', e);
     }
-  }
+  })();
+  </script>
 
-  // 5) Wire up
-  elSearch.addEventListener('input', applySearch);
-  elRefresh.addEventListener('click', load);
+  <!-- Optional: Latest Meltwater (Today) -->
+  <script>
+  (async function(){
+    // create container after Top Outlets
+    let el = document.getElementById('latest-mw');
+    if (!el){
+      el = document.createElement('div');
+      el.id = 'latest-mw';
+      el.style.cssText = 'max-width:1120px;margin:0 auto 24px auto;font-family:system-ui,Arial,sans-serif';
+      const after = document.getElementById('top-outlets');
+      if (after && after.parentNode) after.insertAdjacentElement('afterend', el);
+      else document.body.appendChild(el);
+    }
+    el.innerHTML = '<div style="opacity:.7">Loading Meltwater (today)…</div>';
 
-  // 6) Initial load
-  load();
-})();
-</script>
-<script>
-(async function(){
-  // ensure Top Outlets exists
-  (function ensureTop(){ if(!document.getElementById('top-outlets')){ const d=document.createElement('div'); d.id='top-outlets'; d.style.cssText='max-width:1120px;margin:0 auto 20px auto;font-family:system-ui,Arial,sans-serif'; document.body.appendChild(d);} })();
-
-  const res = await fetch('/api/summary?window=today', { cache: 'no-store' }).catch(()=>null);
-  if(!res) return;
-  const data = await res.json().catch(()=>null);
-  if(!data || !data.ok) return;
-
-  const by = (data.totals && data.totals.by_origin) ? data.totals.by_origin : {};
-  const fmt = (n) => (typeof n === 'number' && Number.isFinite(n) && n.toLocaleString) ? n.toLocaleString() : (n ?? '0');
-  const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = fmt(val); };
-
-  setText('sb-total', data.totals?.all);
-  setText('sb-ga',    by.google_alerts);
-  setText('sb-mw',    by.meltwater);
-  setText('sb-rss',   by.rss);
-  setText('sb-reddit',by.reddit);
-  setText('sb-x',     by.x);
-
-  const wrap = document.getElementById('top-outlets');
-  if (!wrap) return;
-  const pubs = data.top_publishers || [];
-  if (!pubs.length) { wrap.innerHTML = ''; return; }
-
-  let html = '<div style="margin:8px 0 12px 0;font-size:18px;font-weight:600;">Top Outlets (Today)</div>';
-  pubs.forEach((p) => {
-    const reach = fmt(p.total_reach ?? 0);
-    html += '<div style="border:1px solid #e5e7eb;border-radius:12px;padding:12px;margin-bottom:12px;">'
-         +    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">'
-         +      '<div style="font-weight:600;">' + (p.publisher || 'Unknown') + '</div>'
-         +      '<div style="font-size:12px;opacity:.7;">Reach: ' + reach + '</div>'
-         +    '</div>'
-         +    '<ul style="padding-left:18px;margin:0;">';
-    (p.articles || []).forEach((a) => {
-      const title = a.title || '(untitled)';
-      const reachTxt = (typeof a.reach === 'number') ? ' <span style="font-size:12px;opacity:.7;">(reach ' + fmt(a.reach) + ')</span>' : '';
-      if (a.link) {
-        html += '<li style="margin:6px 0;"><a href="' + a.link + '" target="_blank" rel="noreferrer" style="text-decoration:underline;">' + title + '</a>' + reachTxt + '</li>';
-      } else {
-        html += '<li style="margin:6px 0;">' + title + reachTxt + '</li>';
+    try{
+      const res = await fetch('/api/list?origin=meltwater&window=today&limit=100', { cache: 'no-store' });
+      const data = await res.json();
+      if (!data?.ok || !Array.isArray(data.items) || data.items.length === 0) {
+        el.innerHTML = '';
+        return;
       }
-    });
-    html +=   '</ul></div>';
-  });
-  wrap.innerHTML = html;
-})();
-</script>
+      let html = '<div style="margin:8px 0 12px 0;font-size:18px;font-weight:600;">Latest Meltwater (today)</div>';
+      html += '<ul style="padding-left:18px;margin:0;">';
+      data.items.forEach((m) => {
+        const t = m.title || '(untitled)';
+        const src = m.source ? ' <span style="font-size:12px;opacity:.7;">[' + m.source + ']</span>' : '';
+        const reach = (typeof m.reach === 'number')
+          ? ' <span style="font-size:12px;opacity:.7;">(reach ' + (m.reach.toLocaleString ? m.reach.toLocaleString() : m.reach) + ')</span>'
+          : '';
+        if (m.link) {
+          html += '<li style="margin:6px 0;"><a href="' + m.link + '" target="_blank" rel="noreferrer" style="text-decoration:underline;">' + t + '</a>' + src + reach + '</li>';
+        } else {
+          html += '<li style="margin:6px 0;">' + t + src + reach + '</li>';
+        }
+      });
+      html += '</ul>';
+      el.innerHTML = html;
+    }catch{
+      el.innerHTML = '';
+    }
+  })();
+  </script>
 
 </body>
 </html>

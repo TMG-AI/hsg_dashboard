@@ -1,15 +1,28 @@
+// /api/meltwater_webhook.js
 import { Redis } from "@upstash/redis";
-const redis = new Redis({ url: process.env.KV_REST_API_URL, token: process.env.KV_REST_API_TOKEN });
 
-const ZSET = "mentions:z";
-const SEEN_MW  = "mentions:seen:mw";
-const SEEN_URL = "mentions:seen:canon";
+const redis = new Redis({
+  url: process.env.KV_REST_API_URL,
+  token: process.env.KV_REST_API_TOKEN
+});
 
+const ZSET    = "mentions:z";
+const SEEN_MW = "mentions:seen:mw";
+const SEEN_URL= "mentions:seen:canon";
+
+// --- helpers ---
 function normalizeUrl(u){
   try{
     const url = new URL(u);
+    // unwrap Meltwater redirect: https://t.notifications.meltwater.com/...&u=<real>
+    if (/t\.notifications\.meltwater\.com/i.test(url.hostname) && url.searchParams.get("u")) {
+      return normalizeUrl(decodeURIComponent(url.searchParams.get("u")));
+    }
     url.hash = "";
-    ["utm_source","utm_medium","utm_campaign","utm_term","utm_content","utm_id","mc_cid","mc_eid","ref","fbclid","gclid","igshid"].forEach(p=>url.searchParams.delete(p));
+    [
+      "utm_source","utm_medium","utm_campaign","utm_term","utm_content","utm_id",
+      "mc_cid","mc_eid","ref","fbclid","gclid","igshid"
+    ].forEach(p=>url.searchParams.delete(p));
     if (![...url.searchParams.keys()].length) url.search = "";
     url.hostname = url.hostname.toLowerCase();
     let s = url.toString();
@@ -20,179 +33,149 @@ function normalizeUrl(u){
   }
 }
 
-function idFromCanonical(canon){ let h=0; for (let i=0;i<canon.length;i++) h=(h*31+canon.charCodeAt(i))>>>0; return `m_${h.toString(16)}`; }
+function idFromCanonical(canon){
+  let h=0;
+  for (let i=0;i<canon.length;i++) h=(h*31+canon.charCodeAt(i))>>>0;
+  return `m_${h.toString(16)}`;
+}
 
 function toEpoch(d){
-  // Try normal parse
-  let t = Date.parse(d);
-
-  // Fallback: if format like "YYYY-MM-DD HH:mm:ss", treat as UTC
+  let t = Date.parse(d||"");
   if (!Number.isFinite(t) && d) {
     const m = /^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2})$/.exec(String(d));
     if (m) t = Date.parse(`${m[1]}T${m[2]}Z`);
   }
-
-  // Default to now if still invalid
-  let sec = Math.floor((Number.isFinite(t) ? t : Date.now()) / 1000);
-
-  // Clamp future times to now so they appear in the 24h window
-  const now = Math.floor(Date.now() / 1000);
-  if (sec > now) sec = now;
-
+  let sec = Math.floor((Number.isFinite(t) ? t : Date.now())/1000);
+  const now = Math.floor(Date.now()/1000);
+  if (sec > now) sec = now; // clamp future
   return sec;
 }
 
-// Extract fields from Meltwater JSON (handles both Smart Alerts and CSV-like keys)
+function parseReach(s){
+  if (!s) return 0;
+  // examples: "🔊 12.48M Reach — 😃 Positive", "2361 Social mentions ... ↑ 76%"
+  const m = String(s).match(/([\d.,]+)\s*([KMB])?\s*(?:Reach|mentions)/i);
+  if (!m) return 0;
+  let n = parseFloat(m[1].replace(/,/g,""));
+  const unit = (m[2]||"").toUpperCase();
+  if (unit==="K") n *= 1e3;
+  if (unit==="M") n *= 1e6;
+  if (unit==="B") n *= 1e9;
+  return Math.round(n);
+}
+
+function hostFromUrl(u){
+  try { return new URL(u).hostname.toLowerCase(); } catch { return ""; }
+}
+
 function pickFields(it){
-  // 1) Pick the best URL and unwrap Meltwater's redirect (links.article -> ?u=<real URL>)
-  function unwrap(u){
-    try{
-      const url = new URL(u);
-      if (/t\.notifications\.meltwater\.com$/i.test(url.hostname)) {
-        const inner = url.searchParams.get('u');
-        if (inner) return decodeURIComponent(inner);
-      }
-      return u;
-    }catch{ return u || ""; }
-  }
+  const title = it.title || it.headline || it.summaryTitle || "(untitled)";
+  const linkRaw =
+    it.url || it.link || it.permalink ||
+    (it.links && (it.links.article || it.links.source || it.links.app)) ||
+    "";
+  const link = normalizeUrl(linkRaw);
+  const source =
+    it.source_name || it.source || it.publisher || it.authorName ||
+    hostFromUrl(link) || "Meltwater";
+  const publishedISO =
+    it.published_at || it.date || it.published || new Date().toISOString();
+  const mwId = it.id || it.document_id || it.documentId || null;
+  const mwPermalink = it.permalink || (it.links && it.links.app) || null;
+  const reach = parseReach(it.statusLine || it.reach || "");
 
-  const rawUrl = it.url
-               || it.link
-               || (it.links && it.links.article)
-               || it.permalink
-               || it["URL"]
-               || "";
-  const url = unwrap(rawUrl);
-
-  // 2) Publisher/source: prefer authorName; otherwise fall back to the article hostname
-  const fromHost = (() => {
-    try { return new URL(url).hostname.replace(/^www\./,''); } catch { return null; }
-  })();
-  const source = it.authorName
-              || it.source_name
-              || it.publisher
-              || it["Source Name"]
-              || fromHost
-              || "Meltwater";
-
-  // 3) Title
-  const title = it.title || it.headline || it.summaryTitle || it["Headline"] || "(untitled)";
-
-  // 4) Published time (ISO). If missing, use now.
-  const publishedISO = it.published_at || it.date || it.published
-    || (it["Date"] && it["Time"] ? `${it["Date"]} ${it["Time"]}` : new Date().toISOString());
-
-  // 5) Meltwater IDs/links
-  const mwId = it.id || it.document_id || it.documentId || it["Document ID"] || null;
-  const mwPermalink = (it.links && it.links.app) || it.permalink || it.meltwater_url || it["Permalink"] || null;
-
-  // 6) Reach (parse from statusLine like "12.48M Reach — Positive")
-  let reach = null;
-  const sl = it.statusLine || it["statusLine"] || "";
-  if (sl) {
-    const m = /([0-9.,]+)\s*([KMB])\s*Reach/i.exec(sl);
-    if (m) {
-      const n = parseFloat(m[1].replace(/,/g,''));
-      const mult = m[2].toUpperCase()==='B' ? 1e9 : (m[2].toUpperCase()==='M' ? 1e6 : 1e3);
-      reach = Math.round(n * mult);
-    }
-  }
-
-  // 7) Minimal meta we actually get
-  const meta = {
-    alert: it.alert_name || it.search_name || it.source || it["Input Name"] || null, // your alert label (e.g., "Coinbase News alerts")
-    keywords: it.keywords || it["Keywords"] || null,
-    reach,
-    raw_status: sl || null,
-    app_link: mwPermalink || null
-  };
-
-  return { title, url, source, publishedISO, mwId, mwPermalink, meta };
+  return { title, link, source, publishedISO, mwId, mwPermalink, reach };
 }
 
-    // Meltwater Smart Alerts extras
-    providerType: it.providerType || null,
-    statusLine: it.statusLine || null,
-    links: it.links || null,
-  };
-
-  return { title, url, source, publishedISO, mwId, mwPermalink, meta };
-}
-
+// --- handler ---
 export default async function handler(req, res){
   try{
-    if (req.method !== "POST") { res.status(405).send("Use POST"); return; }
-
-    // Shared-secret
-    if (process.env.MW_WEBHOOK_SECRET) {
-      const got = req.headers["x-mw-secret"];
-      if (!got || got !== process.env.MW_WEBHOOK_SECRET) { res.status(401).send("bad secret"); return; }
+    if (req.method !== "POST") {
+      return res.status(405).send("Use POST");
     }
 
-    // Body & force switch
-    const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
+    // shared secret
+    if (process.env.MW_WEBHOOK_SECRET) {
+      const got = (req.headers["x-mw-secret"] || "").toString().trim();
+      if (!got || got !== process.env.MW_WEBHOOK_SECRET) {
+        return res.status(401).send("bad secret");
+      }
+    }
+
+    // force re-ingest flag
     const urlObj = new URL(req.url, "http://localhost");
     const forceParam = urlObj.searchParams.get("force");
-    const force = (forceParam === "1" || forceParam === "true" || (body && body.force === true));
+    const force = (forceParam === "1" || forceParam === "true");
 
-    // Accept arrays, array wrappers, or single-object payloads
+    const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
+
+    // payload shapes
     const items = Array.isArray(body?.results) ? body.results
-                : Array.isArray(body?.items)   ? body.items
-                : body?.result                 ? [body.result]
-                : Array.isArray(body)          ? body
-                : (body && typeof body === "object" ? [body] : []);
+               : Array.isArray(body?.items)   ? body.items
+               : body?.result ? [body.result]
+               : Array.isArray(body) ? body
+               : [];
+
+    if (!items.length){
+      return res.status(200).json({ ok:true, stored:0, note:"no items" });
+    }
 
     let stored = 0;
 
     for (const it of items){
-      const { title, url, source, publishedISO, mwId, mwPermalink, meta } = pickFields(it);
+      const f = pickFields(it);
+      const canon = normalizeUrl(f.link || f.title);
+      if (!canon) continue;
 
-      const canon = normalizeUrl(url || title);
-      const ts = toEpoch(publishedISO);
-
-      // De-dupe unless 'force' is set
+      // de-dupe
       if (!force) {
-        if (mwId) {
-          const first = await redis.sadd(SEEN_MW, String(mwId));
-          if (first !== 1) continue;
-        } else if (canon) {
+        if (f.mwId) {
+          const first = await redis.sadd(SEEN_MW, String(f.mwId));
+          if (first !== 1) continue; // seen
+        } else {
           const first = await redis.sadd(SEEN_URL, canon);
-          if (first !== 1) continue;
+          if (first !== 1) continue; // seen
         }
       }
 
-      const mid = mwId ? `mw_${String(mwId)}` : idFromCanonical(canon || title);
+      const mid = f.mwId ? `mw_${String(f.mwId)}` : idFromCanonical(canon);
+      const ts  = toEpoch(f.publishedISO);
 
       const mention = {
         id: mid,
-        canon: canon || null,
+        canon,
         section: "Meltwater",
-        title,
-        link: url || null,
-        source,
-        matched: ["meltwater-alert"],
-        published_ts: ts,
-        published: new Date(ts * 1000).toISOString(),
-
         origin: "meltwater",
         provider: "Meltwater",
+        title: f.title,
+        link: f.link || null,
+        source: f.source,
+        matched: ["meltwater-alert"],
+        published_ts: ts,
+        published: new Date(ts*1000).toISOString(),
         provider_meta: {
-          ...meta,
-          id: mwId,
-          permalink: mwPermalink
+          id: f.mwId,
+          permalink: f.mwPermalink,
+          reach: f.reach
         },
-
-        // Keep raw for future needs
         provider_raw: it
       };
 
-      // WRITE as JSON string scored by published_ts
       await redis.zadd(ZSET, { score: ts, member: JSON.stringify(mention) });
       stored++;
     }
 
-    res.status(200).json({ ok:true, stored });
-  } catch(e){
-    res.status(500).json({ ok:false, error: e?.message || String(e) });
+    // minimal debug info back to n8n
+    const first = items[0] || {};
+    return res.status(200).json({
+      ok: true,
+      stored,
+      sample: {
+        title: first.title || first.headline || null,
+        link: (first.url || first.link || (first.links && (first.links.article || first.links.source || first.links.app))) || null
+      }
+    });
+  }catch(e){
+    return res.status(500).json({ ok:false, error: e?.message || String(e) });
   }
 }

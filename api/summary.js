@@ -1,11 +1,12 @@
 // /api/summary.js
+
 function startOfTodayET(){
   const now = new Date();
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: "America/New_York",
     year: "numeric", month: "2-digit", day: "2-digit"
   }).formatToParts(now).reduce((o,p)=>{ if(p.type!=="literal") o[p.type]=p.value; return o; }, {});
-  // EDT offset; good for summer
+  // Summer EDT offset; good for "today" counting now
   const iso = `${parts.year}-${parts.month}-${parts.day}T00:00:00-04:00`;
   return Math.floor(new Date(iso).getTime()/1000);
 }
@@ -17,21 +18,6 @@ function toTs(m){
   }
   const t = Date.parse(m?.published || "");
   return Number.isFinite(t) ? Math.floor(t/1000) : 0;
-}
-
-function detectOrigin(m){
-  if (m.origin) return m.origin;
-  const tags = Array.isArray(m.matched) ? m.matched.map(x=>String(x).toLowerCase()) : [];
-  if (tags.includes("meltwater-alert")) return "meltwater";
-  try {
-    const u = m.link ? new URL(m.link) : null;
-    const host = u ? u.hostname.toLowerCase() : "";
-    // Google Alerts patterns
-    if (/(^|\.)news\.google\./.test(host)) return "google_alerts";
-    if (/(^|\.)feedproxy\.google\./.test(host)) return "google_alerts";
-    if (host === "www.google.com" && (u.search||"").includes("ct=ga")) return "google_alerts";
-  } catch {}
-  return "rss";
 }
 
 function isMock(m){
@@ -49,9 +35,45 @@ function isMock(m){
   return false;
 }
 
+// *** Replace-only block: origin detection ***
+function detectOrigin(m){
+  // 1) Keep explicit origin if the item has it
+  if (m && m.origin) return m.origin;
+
+  // 2) Meltwater: several independent hints
+  const sec  = (m?.section  || "").toLowerCase();
+  const prov = (m?.provider || "").toLowerCase();
+  const tags = Array.isArray(m?.matched) ? m.matched.map(x => String(x).toLowerCase()) : [];
+  if (sec === "meltwater" || prov === "meltwater" || tags.includes("meltwater-alert")) {
+    return "meltwater";
+  }
+
+  // 3) Google Alerts: URL patterns and common labels
+  try {
+    const u = m?.link ? new URL(m.link) : null;
+    const host = u ? u.hostname.toLowerCase() : "";
+    if (/(^|\.)news\.google\./.test(host)) return "google_alerts";
+    if (/(^|\.)feedproxy\.google\./.test(host)) return "google_alerts";
+    if (host === "www.google.com") {
+      const q = u.search || "";
+      if (q.includes("ct=ga") || q.includes("tbm=nws")) return "google_alerts";
+    }
+  } catch {}
+
+  const src = (m?.source || "").toLowerCase();
+  if (src.includes("google alerts") || src === "google") return "google_alerts";
+
+  // 4) Optional: honor common social buckets if your items set them
+  if ((m?.section||"").toLowerCase()==="reddit" || src==="reddit") return "reddit";
+  if ((m?.section||"").toLowerCase()==="x" || src==="x" || src==="twitter") return "x";
+
+  // 5) Default
+  return "rss";
+}
+
 export default async function handler(req, res){
   try{
-    // Build absolute URL to your own get_mentions
+    // Build absolute URL to your existing feed so we count exactly what the page shows
     const host  = req.headers["x-forwarded-host"] || req.headers.host;
     const proto = req.headers["x-forwarded-proto"] || "https";
     const url   = `${proto}://${host}/api/get_mentions?limit=1000&nocache=1&_=${Date.now()}`;
@@ -63,23 +85,23 @@ export default async function handler(req, res){
     }
 
     let list = await r.json();
-    // /api/get_mentions returns an array; if it ever returns {items:[]}, handle that too
+    // /api/get_mentions returns an array in your repo; handle {items:[]} just in case
     if (!Array.isArray(list) && list && Array.isArray(list.items)) list = list.items;
     if (!Array.isArray(list)) list = [];
 
     const startToday = startOfTodayET();
 
-    // keep today + drop tests
+    // Keep today's items by each item's own timestamp; drop known test rows
     const today = list.filter(m => toTs(m) >= startToday && !isMock(m));
 
-    // counts
+    // Tally by origin
     const by_origin = { meltwater:0, google_alerts:0, rss:0, reddit:0, x:0, other:0 };
     for (const m of today){
       const o = detectOrigin(m);
       if (by_origin[o] == null) by_origin.other++; else by_origin[o]++;
     }
 
-    // top publishers (Meltwater only), using reach if present
+    // Top publishers (Meltwater only), using Reach if present
     const pubs = new Map();
     for (const m of today){
       if (detectOrigin(m) !== "meltwater") continue;
@@ -104,8 +126,7 @@ export default async function handler(req, res){
       generated_at: new Date().toISOString()
     });
   }catch(e){
-    // Log server error and return a safe payload so tiles don't show dashes forever
-    console.error("summary error:", e);
+    // Return safe payload so tiles render; include error message for debugging
     res.status(200).json({
       ok: false,
       window: "today",

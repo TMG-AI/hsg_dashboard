@@ -413,6 +413,169 @@
   }
 })();
 </script>
+<script>
+(async function(){
+  // Ensure a container exists (creates one if missing)
+  function ensureContainer(){
+    let el = document.getElementById('latest-mw');
+    if (el) return el;
+    el = document.createElement('div');
+    el.id = 'latest-mw';
+    el.style.cssText = 'max-width:1120px;margin:0 auto 24px auto;font-family:system-ui,Arial,sans-serif';
+    const after = document.getElementById('top-outlets');
+    if (after && after.parentNode) after.insertAdjacentElement('afterend', el);
+    else document.body.appendChild(el);
+    return el;
+  }
+
+  const wrap = ensureContainer();
+  wrap.innerHTML = '<div style="opacity:.7">Loading Meltwater (today)…</div>';
+
+  try{
+    const res = await fetch('/api/list?origin=meltwater&window=today&limit=100', { cache: 'no-store' });
+    const data = await res.json();
+    if (!data?.ok || !Array.isArray(data.items) || data.items.length === 0) {
+      wrap.innerHTML = '';
+      return;
+    }
+
+    let html = '<div style="margin:8px 0 12px 0;font-size:18px;font-weight:600;">Latest Meltwater (today)</div>';
+    html += '<ul style="padding-left:18px;margin:0;">';
+
+    data.items.forEach((m) => {
+      const t = m.title || '(untitled)';
+      const src = m.source ? ' <span style="font-size:12px;opacity:.7;">[' + m.source + ']</span>' : '';
+      const reach = (typeof m.reach === 'number')
+        ? ' <span style="font-size:12px;opacity:.7;">(reach ' + (m.reach.toLocaleString ? m.reach.toLocaleString() : m.reach) + ')</span>'
+        : '';
+      if (m.link) {
+        html += '<li style="margin:6px 0;"><a href="' + m.link + '" target="_blank" rel="noreferrer" style="text-decoration:underline;">' + t + '</a>' + src + reach + '</li>';
+      } else {
+        html += '<li style="margin:6px 0;">' + t + src + reach + '</li>';
+      }
+    });
+
+    html += '</ul>';
+    wrap.innerHTML = html;
+  }catch(e){
+    wrap.innerHTML = '';
+  }
+})();
+</script>
+<script>
+(function(){
+  // 0) Remove any "Section" dropdowns
+  try {
+    // remove selects with id/name/class containing "section"
+    document.querySelectorAll('select').forEach(sel => {
+      const id = (sel.id||'').toLowerCase();
+      const nm = (sel.name||'').toLowerCase();
+      const cls = (sel.className||'').toLowerCase();
+      if (id.includes('section') || nm.includes('section') || cls.includes('section')) {
+        sel.closest('*').remove();
+      }
+    });
+    // remove a label that literally says "Section" with an adjacent select
+    document.querySelectorAll('label').forEach(lab => {
+      if ((lab.textContent||'').trim().toLowerCase() === 'section') {
+        const box = lab.closest('*');
+        if (box) box.remove();
+      }
+    });
+  } catch(_) {}
+
+  // 1) Ensure container
+  function ensureAllArticles(){
+    let el = document.getElementById('all-articles');
+    if (el) return el;
+    el = document.createElement('div');
+    el.id = 'all-articles';
+    el.style.cssText = 'max-width:1120px;margin:0 auto 24px auto;font-family:system-ui,Arial,sans-serif';
+    // insert after Top Outlets if present, else at end of body
+    const after = document.getElementById('top-outlets');
+    if (after && after.parentNode) after.insertAdjacentElement('afterend', el);
+    else document.body.appendChild(el);
+    return el;
+  }
+
+  const wrap = ensureAllArticles();
+
+  // 2) Controls (Search + Refresh)
+  wrap.innerHTML = `
+    <div style="display:flex;gap:8px;align-items:center;margin:8px 0 12px 0;">
+      <div style="font-size:18px;font-weight:600;flex:0 0 auto;">All Articles (today, newest first)</div>
+      <div style="flex:1 1 auto;"></div>
+      <input id="aa-search" placeholder="Search title or source…" style="flex:0 0 320px;max-width:50vw;padding:8px 10px;border:1px solid #e5e7eb;border-radius:10px;" />
+      <button id="aa-refresh" style="padding:8px 12px;border:1px solid #e5e7eb;border-radius:10px;background:#f8fafc;cursor:pointer;">Refresh</button>
+    </div>
+    <div id="aa-status" style="font-size:12px;opacity:.7;margin-bottom:6px;"></div>
+    <ul id="aa-list" style="padding-left:18px;margin:0;"></ul>
+  `;
+
+  const elSearch  = document.getElementById('aa-search');
+  const elRefresh = document.getElementById('aa-refresh');
+  const elList    = document.getElementById('aa-list');
+  const elStatus  = document.getElementById('aa-status');
+
+  let allItems = [];
+
+  // 3) Helpers
+  function fmtET(ts){
+    if (!ts || !Number.isFinite(ts)) return '';
+    try {
+      const d = new Date(ts*1000);
+      return d.toLocaleString('en-US', { timeZone: 'America/New_York', year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
+    } catch { return ''; }
+  }
+  function render(list){
+    elList.innerHTML = '';
+    list.forEach(m => {
+      const t = m.title || '(untitled)';
+      const src = m.source ? ` <span style="font-size:12px;opacity:.7;">[${m.source}]</span>` : '';
+      const when = m.published_ts ? ` <span style="font-size:12px;opacity:.7;">${fmtET(m.published_ts)} ET</span>` : '';
+      const li = document.createElement('li');
+      li.style.margin = '6px 0';
+      if (m.link) {
+        li.innerHTML = `<a href="${m.link}" target="_blank" rel="noreferrer" style="text-decoration:underline;">${t}</a>${src}${when}`;
+      } else {
+        li.innerHTML = `${t}${src}${when}`;
+      }
+      elList.appendChild(li);
+    });
+    elStatus.textContent = `${list.length} shown`;
+  }
+  function applySearch(){
+    const q = (elSearch.value||'').toLowerCase().trim();
+    if (!q) { render(allItems); return; }
+    const filtered = allItems.filter(m => (m.title||'').toLowerCase().includes(q) || (m.source||'').toLowerCase().includes(q));
+    render(filtered);
+  }
+
+  // 4) Load (today, all origins), sort newest first
+  async function load(){
+    elStatus.textContent = 'Loading…';
+    try{
+      const res = await fetch('/api/list?origin=all&window=today&limit=500', { cache: 'no-store' });
+      const data = await res.json();
+      const items = Array.isArray(data?.items) ? data.items : [];
+      // sort by published_ts desc
+      items.sort((a,b) => (b.published_ts||0) - (a.published_ts||0));
+      allItems = items;
+      applySearch();
+    }catch{
+      elStatus.textContent = 'Failed to load.';
+      elList.innerHTML = '';
+    }
+  }
+
+  // 5) Wire up
+  elSearch.addEventListener('input', applySearch);
+  elRefresh.addEventListener('click', load);
+
+  // 6) Initial load
+  load();
+})();
+</script>
 
 </body>
 </html>

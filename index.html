@@ -388,7 +388,7 @@
   <script>
 (async function(){
   try{
-    const res = await fetch('/api/summary?window=24h', { cache: 'no-store' });
+    fetch('/api/summary?window=today', { cache: 'no-store' });
     const data = await res.json();
     if (!data?.ok) return;
 

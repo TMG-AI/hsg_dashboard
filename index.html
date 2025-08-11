@@ -92,9 +92,6 @@
 </head>
 <body>
 
-  <!-- Top Outlets (Today) container -->
-  <div id="top-outlets" style="max-width:1120px;margin:0 auto 20px auto;font-family:system-ui,Arial,sans-serif"></div>
-
   <header>
     <div class="header-content">
       <h1 class="header-title">Coinbase Monitoring Dashboard</h1>
@@ -291,16 +288,25 @@
       setText('sb-reddit', by.reddit || 0);
       setText('sb-x',      by.x || 0);
 
-      // Top Outlets list
-      const wrap = document.getElementById('top-outlets');
-      if (!wrap) return;
+      // Top Outlets list - create container after summary section
+      let wrap = document.getElementById('top-outlets');
+      if (!wrap) {
+        wrap = document.createElement('div');
+        wrap.id = 'top-outlets';
+        wrap.style.cssText = 'max-width:1120px;margin:0 auto 20px auto;font-family:system-ui,Arial,sans-serif;padding:0 24px;';
+        const summarySection = document.querySelector('.summary-section');
+        if (summarySection && summarySection.parentNode) {
+          summarySection.insertAdjacentElement('afterend', wrap);
+        }
+      }
+      
       const pubs = data.top_publishers || [];
       if (!pubs.length) { wrap.innerHTML = ''; return; }
 
       let html = '<div style="margin:8px 0 12px 0;font-size:18px;font-weight:600;">Top Outlets (Today)</div>';
       pubs.forEach((p) => {
         const reach = fmt(p.total_reach ?? 0);
-        html += '<div style="border:1px solid #e5e7eb;border-radius:12px;padding:12px;margin-bottom:12px;">'
+        html += '<div style="border:1px solid #e5e7eb;border-radius:12px;padding:12px;margin-bottom:12px;background:#fff;">'
              +    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">'
              +      '<div style="font-weight:600;">' + (p.publisher || 'Unknown') + '</div>'
              +      '<div style="font-size:12px;opacity:.7;">Reach: ' + reach + '</div>'

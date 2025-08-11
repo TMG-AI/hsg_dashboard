@@ -1,134 +1,87 @@
 import { Redis } from "@upstash/redis";
+
 const redis = new Redis({ url: process.env.KV_REST_API_URL, token: process.env.KV_REST_API_TOKEN });
 const ZSET = "mentions:z";
 
-// ---- helpers ----
-function etBoundsToday() {
-  const nowUtc = new Date();
-  const etNow = new Date(nowUtc.toLocaleString("en-US", { timeZone: "America/New_York" }));
-  const y = etNow.getFullYear(), m = etNow.getMonth(), d = etNow.getDate();
-  const offsetMs = etNow.getTime() - nowUtc.getTime(); // ET–UTC offset
-  const startUtcMs = Date.UTC(y, m, d) - offsetMs;     // midnight ET in UTC
-  return { since: Math.floor(startUtcMs/1000), until: Math.floor(Date.now()/1000) };
+function startOfTodayET(){
+  // Today at 00:00 ET in epoch seconds
+  const now = new Date();
+  const et = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', year:'numeric', month:'2-digit', day:'2-digit' })
+               .formatToParts(now)
+               .reduce((o,p)=>{ if(p.type!=='literal') o[p.type]=p.value; return o; },{});
+  const s = `${et.year}-${et.month}-${et.day}T00:00:00-04:00`; // handles DST during summer; good enough for daily counting
+  return Math.floor(new Date(s).getTime()/1000);
 }
-function parseMember(member) {
-  if (member == null) return null;
-  if (typeof member === "object") return member;
-  if (typeof member === "string") { try { return JSON.parse(member); } catch { return null; } }
-  try { return JSON.parse(String(member)); } catch { return null; }
-}
-function hostOf(u){
-  try { return new URL(u).hostname.toLowerCase(); } catch { return ""; }
+
+function safeParse(x){ try { return JSON.parse(x); } catch { return null; } }
+
+function detectOrigin(m){
+  if (m.origin) return m.origin;
+
+  const tags = Array.isArray(m.matched) ? m.matched.map(s=>String(s).toLowerCase()) : [];
+  if (tags.includes('meltwater-alert')) return 'meltwater';
+
+  // Google Alerts recognition: host patterns or tag
+  try {
+    const u = m.link ? new URL(m.link) : null;
+    const host = u ? u.hostname : '';
+    if (/news\.google\./i.test(host) || /google\./i.test(host) && /alerts/i.test(m.title||'')) return 'google_alerts';
+  } catch {}
+
+  // Fallback
+  return 'rss';
 }
 
 export default async function handler(req, res){
   try{
-    if (req.method !== "GET") { res.status(405).send("Use GET"); return; }
+    const window = (req.query.window || 'today').toLowerCase();
+    const end = Math.floor(Date.now()/1000);
+    const start = window === 'today' ? startOfTodayET() : (end - 24*3600);
 
-    // always Today (ET)
-    const { since, until } = etBoundsToday();
+    // pull today's members
+    const raw = await redis.zrangebyscore(ZSET, start, end, { withScores: false });
+    const items = raw.map(safeParse).filter(Boolean);
 
-    // newest first; evaluate by each item's published_ts
-    const rows = await redis.zrange(ZSET, 0, 2000, { rev: true });
+    // filter out obvious test/debug
+    const clean = items.filter(m => !(String(m.id||'').startsWith('debug_') || (m.source||'').includes('Example News')));
 
-    // requested buckets
-    const counts = { google_alerts: 0, meltwater: 0, rss: 0, reddit: 0, x: 0 };
-    let total = 0;
-
-    // for "Top Outlets (Today)" (news only: Meltwater news + RSS)
-    const byPublisher = {};          // { publisher: { reach, count } }
-    const articlesByPublisher = {};  // { publisher: [ { title, link, reach } ] }
-
-    for (const member of rows) {
-      const m = parseMember(member);
-      if (!m) continue;
-
-      const ts = Number(m?.published_ts ?? 0);
-      if (!Number.isFinite(ts) || ts < since || ts > until) continue;
-
-      const section   = String(m.section || "").toLowerCase().trim();
-      const provider  = String(m.provider || "").toLowerCase().trim();
-      const rawOrigin = String(m.origin || "").toLowerCase().trim();
-      const sourceTxt = String(m.source || "").toLowerCase().trim();
-      const link      = m.link || m?.provider_meta?.permalink || null;
-      const h         = hostOf(link);
-
-      const isMwLike =
-        section === "meltwater" ||
-        provider === "meltwater" ||
-        (Array.isArray(m.matched) && m.matched.includes("meltwater-alert")) ||
-        (m?.provider_meta?.permalink && String(m.provider_meta.permalink).includes("meltwater")) ||
-        (m?.provider_meta?.links?.app && String(m.provider_meta.links.app).includes("meltwater"));
-
-      const isTwitter = sourceTxt === "twitter" || sourceTxt === "x" ||
-                        sourceTxt.includes("twitter") || h.includes("twitter.com") || h.includes("x.com");
-      const isReddit  = sourceTxt.includes("reddit") || h.includes("reddit.com");
-
-      // Google Alerts detection (subset of RSS)
-      const isGoogleAlert = (sourceTxt.includes("google alerts") ||
-                             (h.includes("google.com") && String(link||"").toLowerCase().includes("/alerts")));
-
-      // classify into one of the requested buckets
-      if (isMwLike) {
-        if (isTwitter) { counts.x++; total++; }
-        else if (isReddit) { counts.reddit++; total++; }
-        else { counts.meltwater++; total++; }
-      } else if (rawOrigin === "rss" || section === "rss") {
-        if (isGoogleAlert) { counts.google_alerts++; total++; }
-        else { counts.rss++; total++; }
-      } else {
-        // ignore other origins for these totals (keeps "Today" focused on your asked buckets)
-      }
-
-      // Build Top Outlets (Today): Meltwater *news* + all RSS
-      const isNewsForTop =
-        (isMwLike && !isTwitter && !isReddit) || // MW news only
-        (rawOrigin === "rss" || section === "rss");
-
-      if (isNewsForTop) {
-        const pub = (m.source || "Unknown").trim();
-        const reach = parseInt(m?.provider_meta?.reach || 0, 10) || 0;
-        if (!byPublisher[pub]) byPublisher[pub] = { reach: 0, count: 0 };
-        byPublisher[pub].reach += reach;
-        byPublisher[pub].count++;
-        if (!articlesByPublisher[pub]) articlesByPublisher[pub] = [];
-        articlesByPublisher[pub].push({
-          title: m.title || "(untitled)",
-          link,
-          reach
-        });
-      }
+    // counts
+    const by_origin = { meltwater:0, google_alerts:0, rss:0, reddit:0, x:0, other:0 };
+    for (const m of clean){
+      const origin = detectOrigin(m);
+      if (by_origin[origin] == null) by_origin.other++;
+      else by_origin[origin]++;
     }
+    const total = clean.length;
 
-    const top_publishers = Object.entries(byPublisher)
-      .sort((a, b) => b[1].reach - a[1].reach)
-      .slice(0, 5)
-      .map(([publisher, stats]) => ({
-        publisher,
-        total_reach: stats.reach,
-        article_count: stats.count,
-        articles: (articlesByPublisher[publisher] || [])
-          .slice(0, 5)
-          .map(a => ({ title: a.title, link: a.link, reach: a.reach }))
-      }));
+    // simple top publishers (Meltwater only) by reach
+    const pubs = new Map();
+    for (const m of clean){
+      const origin = detectOrigin(m);
+      if (origin !== 'meltwater') continue;
+      const pub = m.source || 'Unknown';
+      const reach = Number(m?.provider_meta?.reach) || 0;
+      const arr = pubs.get(pub) || [];
+      arr.push({ title: m.title, link: m.link || null, reach });
+      pubs.set(pub, arr);
+    }
+    const top_publishers = [...pubs.entries()].map(([publisher, arr]) => ({
+      publisher,
+      total_reach: arr.reduce((a,b)=>a+(b.reach||0),0),
+      article_count: arr.length,
+      articles: arr.slice(0,5)
+    }))
+    .sort((a,b)=> (b.total_reach||0)-(a.total_reach||0))
+    .slice(0,5);
 
     res.status(200).json({
-      ok: true,
-      window: "today",
-      totals: {
-        all: total,
-        by_origin: {
-          google_alerts: counts.google_alerts,
-          meltwater: counts.meltwater,
-          rss: counts.rss,
-          reddit: counts.reddit,   // from Meltwater
-          x: counts.x              // from Meltwater
-        }
-      },
+      ok:true,
+      window,
+      totals:{ all: total, by_origin },
       top_publishers,
       generated_at: new Date().toISOString()
     });
-  } catch (e) {
+  }catch(e){
     res.status(500).json({ ok:false, error: e?.message || String(e) });
   }
 }

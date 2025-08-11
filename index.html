@@ -344,5 +344,18 @@
   }
 })();
 </script>
+  <script>
+(function(){
+  function hideByValueId(id){
+    const v = document.getElementById(id);
+    if (!v) return;
+    // Try to remove the whole summary item if present; else hide the value node
+    const box = v.closest('.summary-item') || v.parentElement;
+    if (box) box.style.display = 'none'; else v.style.display = 'none';
+  }
+  hideByValueId('sb-reddit');
+  hideByValueId('sb-x');
+})();
+</script>
 </body>
 </html>

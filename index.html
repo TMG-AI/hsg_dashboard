@@ -119,11 +119,11 @@
         <div class="summary-value" id="sb-rss">—</div>
       </div>
       <div class="summary-item">
-        <div class="summary-label">Reddit (MW)</div>
+        <div class="summary-label">Reddit</div>
         <div class="summary-value" id="sb-reddit">—</div>
       </div>
       <div class="summary-item">
-        <div class="summary-label">Twitter/X (MW)</div>
+        <div class="summary-label">Twitter/X</div>
         <div class="summary-value" id="sb-x">—</div>
       </div>
     </div>
@@ -269,7 +269,7 @@
     setInterval(loadMentions, 60*1000);
   </script>
 
-  <!-- Summary + Top Outlets (Today) -->
+  <!-- Summary data loading only -->
   <script>
   (async function(){
     try{
@@ -288,91 +288,13 @@
       setText('sb-reddit', by.reddit || 0);
       setText('sb-x',      by.x || 0);
 
-      // Top Outlets list - create container after summary section
-      let wrap = document.getElementById('top-outlets');
-      if (!wrap) {
-        wrap = document.createElement('div');
-        wrap.id = 'top-outlets';
-        wrap.style.cssText = 'max-width:1120px;margin:0 auto 20px auto;font-family:system-ui,Arial,sans-serif;padding:0 24px;';
-        const summarySection = document.querySelector('.summary-section');
-        if (summarySection && summarySection.parentNode) {
-          summarySection.insertAdjacentElement('afterend', wrap);
-        }
-      }
-      
-      const pubs = data.top_publishers || [];
-      if (!pubs.length) { wrap.innerHTML = ''; return; }
-
-      let html = '<div style="margin:8px 0 12px 0;font-size:18px;font-weight:600;">Top Outlets (Today)</div>';
-      pubs.forEach((p) => {
-        const reach = fmt(p.total_reach ?? 0);
-        html += '<div style="border:1px solid #e5e7eb;border-radius:12px;padding:12px;margin-bottom:12px;background:#fff;">'
-             +    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">'
-             +      '<div style="font-weight:600;">' + (p.publisher || 'Unknown') + '</div>'
-             +      '<div style="font-size:12px;opacity:.7;">Reach: ' + reach + '</div>'
-             +    '</div>'
-             +    '<ul style="padding-left:18px;margin:0;">';
-        (p.articles || []).forEach((a) => {
-          const title = a.title || '(untitled)';
-          const reachTxt = (typeof a.reach === 'number') ? ' <span style="font-size:12px;opacity:.7;">(reach ' + fmt(a.reach) + ')</span>' : '';
-          if (a.link) {
-            html += '<li style="margin:6px 0;"><a href="' + a.link + '" target="_blank" rel="noreferrer" style="text-decoration:underline;">' + title + '</a>' + reachTxt + '</li>';
-          } else {
-            html += '<li style="margin:6px 0;">' + title + reachTxt + '</li>';
-          }
-        });
-        html +=   '</ul></div>';
-      });
-      wrap.innerHTML = html;
     } catch(e) {
-      console.error('Error loading summary/top outlets:', e);
+      console.error('Error loading summary:', e);
     }
   })();
   </script>
 
-  <!-- Optional: Latest Meltwater (Today) -->
-  <script>
-  (async function(){
-    // create container after Top Outlets
-    let el = document.getElementById('latest-mw');
-    if (!el){
-      el = document.createElement('div');
-      el.id = 'latest-mw';
-      el.style.cssText = 'max-width:1120px;margin:0 auto 24px auto;font-family:system-ui,Arial,sans-serif';
-      const after = document.getElementById('top-outlets');
-      if (after && after.parentNode) after.insertAdjacentElement('afterend', el);
-      else document.body.appendChild(el);
-    }
-    el.innerHTML = '<div style="opacity:.7">Loading Meltwater (today)…</div>';
 
-    try{
-      const res = await fetch('/api/list?origin=meltwater&window=today&limit=100', { cache: 'no-store' });
-      const data = await res.json();
-      if (!data?.ok || !Array.isArray(data.items) || data.items.length === 0) {
-        el.innerHTML = '';
-        return;
-      }
-      let html = '<div style="margin:8px 0 12px 0;font-size:18px;font-weight:600;">Latest Meltwater (today)</div>';
-      html += '<ul style="padding-left:18px;margin:0;">';
-      data.items.forEach((m) => {
-        const t = m.title || '(untitled)';
-        const src = m.source ? ' <span style="font-size:12px;opacity:.7;">[' + m.source + ']</span>' : '';
-        const reach = (typeof m.reach === 'number')
-          ? ' <span style="font-size:12px;opacity:.7;">(reach ' + (m.reach.toLocaleString ? m.reach.toLocaleString() : m.reach) + ')</span>'
-          : '';
-        if (m.link) {
-          html += '<li style="margin:6px 0;"><a href="' + m.link + '" target="_blank" rel="noreferrer" style="text-decoration:underline;">' + t + '</a>' + src + reach + '</li>';
-        } else {
-          html += '<li style="margin:6px 0;">' + t + src + reach + '</li>';
-        }
-      });
-      html += '</ul>';
-      el.innerHTML = html;
-    }catch{
-      el.innerHTML = '';
-    }
-  })();
-  </script>
 
 </body>
 </html>

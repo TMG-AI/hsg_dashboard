@@ -6,14 +6,13 @@ const redis = new Redis({
 });
 const ZSET = "mentions:z";
 
-// Start of "today" in ET (EDT offset used during summer)
 function startOfTodayET(){
   const now = new Date();
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: "America/New_York",
     year: "numeric", month: "2-digit", day: "2-digit"
   }).formatToParts(now).reduce((o,p)=>{ if(p.type!=="literal") o[p.type]=p.value; return o; }, {});
-  const iso = `${parts.year}-${parts.month}-${parts.day}T00:00:00-04:00`;
+  const iso = `${parts.year}-${parts.month}-${parts.day}T00:00:00-04:00`; // EDT
   return Math.floor(new Date(iso).getTime()/1000);
 }
 
@@ -35,7 +34,7 @@ function detectOrigin(m){
   try {
     const u = m.link ? new URL(m.link) : null;
     const host = u ? u.hostname.toLowerCase() : "";
-    // Google Alerts patterns: news.google.*, feedproxy.google.*, google.com/url?… (GA redirects)
+    // Google Alerts patterns
     if (/(^|\.)news\.google\./.test(host)) return "google_alerts";
     if (/(^|\.)feedproxy\.google\./.test(host)) return "google_alerts";
     if (host === "www.google.com" && (u.search||"").includes("ct=ga")) return "google_alerts";
@@ -62,26 +61,25 @@ export default async function handler(req, res){
   try{
     const startToday = startOfTodayET();
 
-    // ✅ Pull a wide score window (last 3 days) so existing items are included
-    const end = Math.floor(Date.now()/1000);
-    const start = end - 3*24*3600;
-    const raw = await redis.zrange(ZSET, start, end, { byScore: true });
+    // ✅ Get newest members by index (independent of their scores)
+    const LOOKBACK = 3000; // increase if needed
+    const raw = await redis.zrange(ZSET, 0, LOOKBACK-1, { rev: true });
     const all = raw.map(safeParse).filter(Boolean);
 
-    // 1) Keep only today's items by each item's own timestamp
+    // Only today's items, by each item's own timestamp
     const today = all.filter(m => toTs(m) >= startToday);
 
-    // 2) Drop the known test items
+    // Drop known test items
     const clean = today.filter(m => !isMock(m));
 
-    // 3) Tally by origin
+    // Tally by origin
     const by_origin = { meltwater:0, google_alerts:0, rss:0, reddit:0, x:0, other:0 };
     for (const m of clean){
       const o = detectOrigin(m);
       if (by_origin[o] == null) by_origin.other++; else by_origin[o]++;
     }
 
-    // 4) Top publishers (Meltwater) by reach if available
+    // Top publishers (Meltwater) by reach if present
     const pubs = new Map();
     for (const m of clean){
       if (detectOrigin(m) !== "meltwater") continue;

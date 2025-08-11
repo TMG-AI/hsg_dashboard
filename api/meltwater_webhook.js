@@ -6,15 +6,15 @@ const redis = new Redis({
   token: process.env.KV_REST_API_TOKEN
 });
 
-const ZSET    = "mentions:z";
-const SEEN_MW = "mentions:seen:mw";
-const SEEN_URL= "mentions:seen:canon";
+const ZSET     = "mentions:z";
+const SEEN_MW  = "mentions:seen:mw";
+const SEEN_URL = "mentions:seen:canon";
 
-// --- helpers ---
+// ---------- helpers ----------
 function normalizeUrl(u){
   try{
     const url = new URL(u);
-    // unwrap Meltwater redirect: https://t.notifications.meltwater.com/...&u=<real>
+    // unwrap Meltwater redirect links
     if (/t\.notifications\.meltwater\.com/i.test(url.hostname) && url.searchParams.get("u")) {
       return normalizeUrl(decodeURIComponent(url.searchParams.get("u")));
     }
@@ -28,17 +28,11 @@ function normalizeUrl(u){
     let s = url.toString();
     if (s.endsWith("/")) s = s.slice(0,-1);
     return s;
-  } catch {
+  }catch{
     return (u||"").trim();
   }
 }
-
-function idFromCanonical(canon){
-  let h=0;
-  for (let i=0;i<canon.length;i++) h=(h*31+canon.charCodeAt(i))>>>0;
-  return `m_${h.toString(16)}`;
-}
-
+function idFromCanonical(canon){ let h=0; for (let i=0;i<canon.length;i++) h=(h*31+canon.charCodeAt(i))>>>0; return `m_${h.toString(16)}`; }
 function toEpoch(d){
   let t = Date.parse(d||"");
   if (!Number.isFinite(t) && d) {
@@ -47,26 +41,19 @@ function toEpoch(d){
   }
   let sec = Math.floor((Number.isFinite(t) ? t : Date.now())/1000);
   const now = Math.floor(Date.now()/1000);
-  if (sec > now) sec = now; // clamp future
+  if (sec > now) sec = now;
   return sec;
 }
-
 function parseReach(s){
   if (!s) return 0;
-  // examples: "🔊 12.48M Reach — 😃 Positive", "2361 Social mentions ... ↑ 76%"
   const m = String(s).match(/([\d.,]+)\s*([KMB])?\s*(?:Reach|mentions)/i);
   if (!m) return 0;
   let n = parseFloat(m[1].replace(/,/g,""));
-  const unit = (m[2]||"").toUpperCase();
-  if (unit==="K") n *= 1e3;
-  if (unit==="M") n *= 1e6;
-  if (unit==="B") n *= 1e9;
+  const u = (m[2]||"").toUpperCase();
+  if (u==="K") n*=1e3; if (u==="M") n*=1e6; if (u==="B") n*=1e9;
   return Math.round(n);
 }
-
-function hostFromUrl(u){
-  try { return new URL(u).hostname.toLowerCase(); } catch { return ""; }
-}
+function hostFromUrl(u){ try { return new URL(u).hostname.toLowerCase(); } catch { return ""; } }
 
 function pickFields(it){
   const title = it.title || it.headline || it.summaryTitle || "(untitled)";
@@ -87,37 +74,49 @@ function pickFields(it){
   return { title, link, source, publishedISO, mwId, mwPermalink, reach };
 }
 
-// --- handler ---
+// Accept any of these shapes: array, {results:[]}, {items:[]}, {result:{}}, single object,
+// OR wrapper objects like { body: {...} } / { data: {...} } / { payload: {...} }
+function extractItems(body){
+  const root = (body && (body.body || body.data || body.payload)) || body;
+
+  if (Array.isArray(root)) return root;
+  if (Array.isArray(root?.results)) return root.results;
+  if (Array.isArray(root?.items)) return root.items;
+  if (root?.result) return [root.result];
+
+  // single-object alert payload (has title/links/url)
+  if (root && (root.title || root.headline || root.url || root.link || root.permalink || root.links)) {
+    return [root];
+  }
+
+  return [];
+}
+
+// ---------- handler ----------
 export default async function handler(req, res){
   try{
-    if (req.method !== "POST") {
-      return res.status(405).send("Use POST");
-    }
+    if (req.method !== "POST") return res.status(405).send("Use POST");
 
-    // shared secret
+    // shared-secret
     if (process.env.MW_WEBHOOK_SECRET) {
       const got = (req.headers["x-mw-secret"] || "").toString().trim();
-      if (!got || got !== process.env.MW_WEBHOOK_SECRET) {
-        return res.status(401).send("bad secret");
-      }
+      if (!got || got !== process.env.MW_WEBHOOK_SECRET) return res.status(401).send("bad secret");
     }
 
-    // force re-ingest flag
     const urlObj = new URL(req.url, "http://localhost");
     const forceParam = urlObj.searchParams.get("force");
     const force = (forceParam === "1" || forceParam === "true");
 
-    const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
-
-    // payload shapes
-    const items = Array.isArray(body?.results) ? body.results
-               : Array.isArray(body?.items)   ? body.items
-               : body?.result ? [body.result]
-               : Array.isArray(body) ? body
-               : [];
+    const rawBody = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
+    const items = extractItems(rawBody);
 
     if (!items.length){
-      return res.status(200).json({ ok:true, stored:0, note:"no items" });
+      return res.status(200).json({
+        ok: true,
+        stored: 0,
+        note: "no items",
+        received_keys: rawBody && typeof rawBody==="object" ? Object.keys(rawBody) : null
+      });
     }
 
     let stored = 0;
@@ -127,14 +126,13 @@ export default async function handler(req, res){
       const canon = normalizeUrl(f.link || f.title);
       if (!canon) continue;
 
-      // de-dupe
       if (!force) {
         if (f.mwId) {
           const first = await redis.sadd(SEEN_MW, String(f.mwId));
-          if (first !== 1) continue; // seen
+          if (first !== 1) continue;
         } else {
           const first = await redis.sadd(SEEN_URL, canon);
-          if (first !== 1) continue; // seen
+          if (first !== 1) continue;
         }
       }
 
@@ -153,11 +151,7 @@ export default async function handler(req, res){
         matched: ["meltwater-alert"],
         published_ts: ts,
         published: new Date(ts*1000).toISOString(),
-        provider_meta: {
-          id: f.mwId,
-          permalink: f.mwPermalink,
-          reach: f.reach
-        },
+        provider_meta: { id: f.mwId, permalink: f.mwPermalink, reach: f.reach },
         provider_raw: it
       };
 
@@ -165,7 +159,6 @@ export default async function handler(req, res){
       stored++;
     }
 
-    // minimal debug info back to n8n
     const first = items[0] || {};
     return res.status(200).json({
       ok: true,

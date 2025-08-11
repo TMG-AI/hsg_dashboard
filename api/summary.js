@@ -35,64 +35,65 @@ function isMock(m){
   return false;
 }
 
-// Domains you see **only** via Google Alerts (expand as needed)
-const GA_SOURCES = new Set([
-  "wsj.com", "www.wsj.com",
-  "barrons.com", "www.barrons.com",
+// Your RSS domains (from your list) – include www. variants
+const RSS_DOMAINS = new Set([
+  "coindesk.com","www.coindesk.com",
+  "theblock.co","www.theblock.co",
+  "cointelegraph.com","www.cointelegraph.com",
+  "decrypt.co","www.decrypt.co",
+  "blockworks.co","www.blockworks.co",
+  "news.bitcoin.com","www.news.bitcoin.com","bitcoin.com","www.bitcoin.com", // feed host may vary
+  "crypto.news","www.crypto.news",
+  "newsbtc.com","www.newsbtc.com",
+  "u.today","www.u.today",
+  "cryptopanic.com","www.cryptopanic.com",
+  "bitcoinist.com","www.bitcoinist.com",
+  "99bitcoins.com","www.99bitcoins.com",
+  "bitcoinnews.com","www.bitcoinnews.com"
 ]);
 
-function detectOrigin(m){
-  // Explicit origin wins
-  if (m && m.origin) return m.origin;
+function hostFromUrl(u){
+  try { return new URL(u).hostname.toLowerCase(); } catch { return ""; }
+}
+function domainLike(s){
+  const x = String(s||"").toLowerCase();
+  return x.includes(".") ? x : "";
+}
 
-  // Meltwater hints
+function detectOrigin(m){
+  // 1) Explicit Meltwater hints
   const sec  = (m?.section  || "").toLowerCase();
   const prov = (m?.provider || "").toLowerCase();
   const tags = Array.isArray(m?.matched) ? m.matched.map(x => String(x).toLowerCase()) : [];
-  if (sec === "meltwater" || prov === "meltwater" || tags.includes("meltwater-alert")) {
+  if ((m && m.origin === "meltwater") || sec === "meltwater" || prov === "meltwater" || tags.includes("meltwater-alert")) {
     return "meltwater";
   }
 
-  // Google Alerts patterns and GA-only publishers
-  try {
-    const u = m?.link ? new URL(m.link) : null;
-    const host = u ? u.hostname.toLowerCase() : "";
-    if (/(^|\.)news\.google\./.test(host)) return "google_alerts";
-    if (/(^|\.)feedproxy\.google\./.test(host)) return "google_alerts";
-    if (host === "www.google.com") {
-      const q = u.search || "";
-      if (q.includes("ct=ga") || q.includes("tbm=nws")) return "google_alerts";
-    }
-    if (GA_SOURCES.has(host)) return "google_alerts";
-  } catch {} // never break on bad URLs
+  // 2) If link host matches one of your RSS domains → rss
+  const host = hostFromUrl(m?.link);
+  if (host && RSS_DOMAINS.has(host)) return "rss";
 
-  const src = (m?.source || "").toLowerCase();
-  if (src.includes("google alerts") || src === "google" || src === "google news") {
-    return "google_alerts";
-  }
+  // 3) If source looks like a domain and matches your RSS set → rss
+  const srcDom = domainLike(m?.source);
+  if (srcDom && RSS_DOMAINS.has(srcDom)) return "rss";
 
-  // Optional social buckets if your items use them
-  if (sec === "reddit" || src === "reddit") return "reddit";
-  if (sec === "x" || src === "x" || src === "twitter") return "x";
-
-  // Default
-  return "rss";
+  // 4) Everything else → google_alerts (your request)
+  return "google_alerts";
 }
 
 export default async function handler(req, res){
-  // Always return ok:true on success path so tiles don’t show dashes
   try{
+    // Read from the same feed your page uses (no Redis assumptions)
     const host  = req.headers["x-forwarded-host"] || req.headers.host;
     const proto = req.headers["x-forwarded-proto"] || "https";
     const url   = `${proto}://${host}/api/get_mentions?limit=1000&nocache=1&_=${Date.now()}`;
 
-    // Fetch the same feed the page uses
     const r = await fetch(url, { cache: "no-store", headers: { "accept": "application/json" } });
     if (!r.ok) {
       return res.status(200).json({
         ok: true,
         window: "today",
-        totals: { all: 0, by_origin: { meltwater:0, google_alerts:0, rss:0, reddit:0, x:0, other:0 } },
+        totals: { all: 0, by_origin: { meltwater:0, google_alerts:0, rss:0, other:0 } },
         top_publishers: [],
         note: `get_mentions returned ${r.status}`
       });
@@ -105,17 +106,17 @@ export default async function handler(req, res){
 
     const startToday = startOfTodayET();
 
-    // Keep today's; drop known test rows
+    // Keep today's, drop test rows
     const today = list.filter(m => toTs(m) >= startToday && !isMock(m));
 
-    // Tally
-    const by_origin = { meltwater:0, google_alerts:0, rss:0, reddit:0, x:0, other:0 };
+    // Tally using your new rule
+    const by_origin = { meltwater:0, google_alerts:0, rss:0, other:0 };
     for (const m of today){
       const o = detectOrigin(m);
       if (by_origin[o] == null) by_origin.other++; else by_origin[o]++;
     }
 
-    // Top publishers (Meltwater)
+    // Top publishers (Meltwater only)
     const pubs = new Map();
     for (const m of today){
       if (detectOrigin(m) !== "meltwater") continue;
@@ -141,11 +142,11 @@ export default async function handler(req, res){
     });
 
   } catch (e){
-    // Never 500 → return ok:true with zeros so UI shows 0s (not dashes)
+    // Never 500 → safe zeros so tiles render
     return res.status(200).json({
       ok: true,
       window: "today",
-      totals: { all: 0, by_origin: { meltwater:0, google_alerts:0, rss:0, reddit:0, x:0, other:0 } },
+      totals: { all: 0, by_origin: { meltwater:0, google_alerts:0, rss:0, other:0 } },
       top_publishers: [],
       note: "summary fallback",
       error_message: e?.message || String(e)

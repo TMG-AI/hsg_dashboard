@@ -44,43 +44,71 @@ function toEpoch(d){
 
 // Extract fields from Meltwater JSON (handles both Smart Alerts and CSV-like keys)
 function pickFields(it){
-  const title = it.title || it.headline || it.summaryTitle || it["Headline"] || it["Title"] || "(untitled)";
-  const url   = it.url || it.link || it.permalink || it?.links?.article || it["URL"] || "";
-  const source= it.source_name || it.source || it.publisher || it["Source Name"] || it["Publisher"] || "Meltwater";
+  // 1) Pick the best URL and unwrap Meltwater's redirect (links.article -> ?u=<real URL>)
+  function unwrap(u){
+    try{
+      const url = new URL(u);
+      if (/t\.notifications\.meltwater\.com$/i.test(url.hostname)) {
+        const inner = url.searchParams.get('u');
+        if (inner) return decodeURIComponent(inner);
+      }
+      return u;
+    }catch{ return u || ""; }
+  }
 
-  const publishedISO =
-    it.published_at || it.date || it.published ||
-    (it["Date"] && it["Time"] ? `${it["Date"]} ${it["Time"]}` : new Date().toISOString());
+  const rawUrl = it.url
+               || it.link
+               || (it.links && it.links.article)
+               || it.permalink
+               || it["URL"]
+               || "";
+  const url = unwrap(rawUrl);
 
+  // 2) Publisher/source: prefer authorName; otherwise fall back to the article hostname
+  const fromHost = (() => {
+    try { return new URL(url).hostname.replace(/^www\./,''); } catch { return null; }
+  })();
+  const source = it.authorName
+              || it.source_name
+              || it.publisher
+              || it["Source Name"]
+              || fromHost
+              || "Meltwater";
+
+  // 3) Title
+  const title = it.title || it.headline || it.summaryTitle || it["Headline"] || "(untitled)";
+
+  // 4) Published time (ISO). If missing, use now.
+  const publishedISO = it.published_at || it.date || it.published
+    || (it["Date"] && it["Time"] ? `${it["Date"]} ${it["Time"]}` : new Date().toISOString());
+
+  // 5) Meltwater IDs/links
   const mwId = it.id || it.document_id || it.documentId || it["Document ID"] || null;
-  const mwPermalink = it.permalink || it.meltwater_url || it?.links?.app || it["Permalink"] || null;
+  const mwPermalink = (it.links && it.links.app) || it.permalink || it.meltwater_url || it["Permalink"] || null;
 
+  // 6) Reach (parse from statusLine like "12.48M Reach — Positive")
+  let reach = null;
+  const sl = it.statusLine || it["statusLine"] || "";
+  if (sl) {
+    const m = /([0-9.,]+)\s*([KMB])\s*Reach/i.exec(sl);
+    if (m) {
+      const n = parseFloat(m[1].replace(/,/g,''));
+      const mult = m[2].toUpperCase()==='B' ? 1e9 : (m[2].toUpperCase()==='M' ? 1e6 : 1e3);
+      reach = Math.round(n * mult);
+    }
+  }
+
+  // 7) Minimal meta we actually get
   const meta = {
-    alert: it.alert_name || it.search_name || it.source || it["Input Name"] || null,
+    alert: it.alert_name || it.search_name || it.source || it["Input Name"] || null, // your alert label (e.g., "Coinbase News alerts")
     keywords: it.keywords || it["Keywords"] || null,
-    information_type: it.information_type || it["Information Type"] || null,
-    source_type: it.source_type || it["Source Type"] || null,
-    source_domain: it.source_domain || it["Source Domain"] || null,
-    content_type: it.content_type || it["Content Type"] || null,
-    author: it.author || it["Author Name"] || it.authorName || null,
-    language: it.language || it["Language"] || null,
-    region: it.region || it["Region"] || null,
-    country: it.country || it["Country"] || null,
-    sentiment: it.sentiment || it["Sentiment"] || null,
-    reach: it.reach || it["Reach"] || null,
-    global_reach: it.global_reach || it["Global Reach"] || null,
-    national_reach: it.national_reach || it["National Reach"] || null,
-    local_reach: it.local_reach || it["Local Reach"] || null,
-    ave: it.ave || it["AVE"] || null,
-    social_echo: it.social_echo || it["Social Echo"] || null,
-    editorial_echo: it.editorial_echo || it["Editorial Echo"] || null,
-    engagement: it.engagement || it["Engagement"] || null,
-    shares: it.shares || it["Shares"] || null,
-    quotes: it.quotes || it["Quotes"] || null,
-    likes: it.likes || it["Likes"] || null,
-    replies: it.replies || it["Replies"] || null,
-    reposts: it.reposts || it["Reposts"] || null,
-    comments: it.comments || it["Comments"] || null,
+    reach,
+    raw_status: sl || null,
+    app_link: mwPermalink || null
+  };
+
+  return { title, url, source, publishedISO, mwId, mwPermalink, meta };
+}
 
     // Meltwater Smart Alerts extras
     providerType: it.providerType || null,

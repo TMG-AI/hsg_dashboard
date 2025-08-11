@@ -1,12 +1,12 @@
-import { NextResponse } from "next/server"; // safe if unused in your setup; ignored otherwise
-
+// /api/summary.js
 function startOfTodayET(){
   const now = new Date();
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: "America/New_York",
     year: "numeric", month: "2-digit", day: "2-digit"
   }).formatToParts(now).reduce((o,p)=>{ if(p.type!=="literal") o[p.type]=p.value; return o; }, {});
-  const iso = `${parts.year}-${parts.month}-${parts.day}T00:00:00-04:00`; // EDT
+  // EDT offset; good for summer
+  const iso = `${parts.year}-${parts.month}-${parts.day}T00:00:00-04:00`;
   return Math.floor(new Date(iso).getTime()/1000);
 }
 
@@ -26,6 +26,7 @@ function detectOrigin(m){
   try {
     const u = m.link ? new URL(m.link) : null;
     const host = u ? u.hostname.toLowerCase() : "";
+    // Google Alerts patterns
     if (/(^|\.)news\.google\./.test(host)) return "google_alerts";
     if (/(^|\.)feedproxy\.google\./.test(host)) return "google_alerts";
     if (host === "www.google.com" && (u.search||"").includes("ct=ga")) return "google_alerts";
@@ -50,31 +51,35 @@ function isMock(m){
 
 export default async function handler(req, res){
   try{
-    // Build absolute URL to your own get_mentions endpoint
-    const host = req.headers.host;
-    const url  = `https://${host}/api/get_mentions?limit=1000&nocache=1`;
+    // Build absolute URL to your own get_mentions
+    const host  = req.headers["x-forwarded-host"] || req.headers.host;
+    const proto = req.headers["x-forwarded-proto"] || "https";
+    const url   = `${proto}://${host}/api/get_mentions?limit=1000&nocache=1&_=${Date.now()}`;
 
-    const r = await fetch(url, { cache: "no-store" });
+    const r = await fetch(url, { cache: "no-store", headers: { "accept": "application/json" } });
     if (!r.ok) {
       res.status(502).json({ ok:false, error:`get_mentions ${r.status}` });
       return;
     }
-    const data = await r.json();
-    const list = Array.isArray(data) ? data : [];
+
+    let list = await r.json();
+    // /api/get_mentions returns an array; if it ever returns {items:[]}, handle that too
+    if (!Array.isArray(list) && list && Array.isArray(list.items)) list = list.items;
+    if (!Array.isArray(list)) list = [];
 
     const startToday = startOfTodayET();
 
-    // Keep today's, drop test items
+    // keep today + drop tests
     const today = list.filter(m => toTs(m) >= startToday && !isMock(m));
 
-    // Tally by origin
+    // counts
     const by_origin = { meltwater:0, google_alerts:0, rss:0, reddit:0, x:0, other:0 };
     for (const m of today){
       const o = detectOrigin(m);
       if (by_origin[o] == null) by_origin.other++; else by_origin[o]++;
     }
 
-    // Top publishers (Meltwater only), by optional reach
+    // top publishers (Meltwater only), using reach if present
     const pubs = new Map();
     for (const m of today){
       if (detectOrigin(m) !== "meltwater") continue;
@@ -99,6 +104,14 @@ export default async function handler(req, res){
       generated_at: new Date().toISOString()
     });
   }catch(e){
-    res.status(500).json({ ok:false, error: e?.message || String(e) });
+    // Log server error and return a safe payload so tiles don't show dashes forever
+    console.error("summary error:", e);
+    res.status(200).json({
+      ok: false,
+      window: "today",
+      totals: { all: 0, by_origin: { meltwater:0, google_alerts:0, rss:0, reddit:0, x:0, other:0 } },
+      top_publishers: [],
+      error: e?.message || String(e)
+    });
   }
 }

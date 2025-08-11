@@ -32,7 +32,7 @@
       padding: 20px;
     }
     
-    .summary-item {
+    .-item {
       background: #fff;
       border-radius: 16px;
       padding: 24px;
@@ -42,13 +42,13 @@
       text-align: center;
     }
     
-    .summary-item:hover {
+    .-item:hover {
       transform: translateY(-2px);
       box-shadow: 0 8px 30px rgba(0,0,0,.12);
       border-color: rgba(139,195,74,.4);
     }
     
-    .summary-label {
+    .-label {
       color: #333;
       font-size: 16px;
       font-weight: 700;
@@ -57,7 +57,7 @@
       letter-spacing: 0.8px;
     }
     
-    .summary-value {
+    .-value {
       font-size: 32px;
       font-weight: 700;
       color: #4a6741;
@@ -100,7 +100,7 @@
     .skeleton-chip{height:24px;width:60px;display:inline-block;margin-right:8px}
     @media (max-width:768px){
       .wrap{padding:20px 16px}
-      .summary-grid{grid-template-columns:repeat(2, 1fr)}
+      .-grid{grid-template-columns:repeat(2, 1fr)}
       .meta{flex-direction:column;align-items:flex-start;gap:8px}
     }
     .refresh-news-btn {
@@ -133,6 +133,22 @@
   </style>
 </head>
 <body>
+  <!-- BEGIN: Summary Bar -->
+<div id="summary-bar" style="max-width:1120px;margin:20px auto;padding:12px;border:1px solid #e5e7eb;border-radius:12px;font-family:system-ui,Arial,sans-serif">
+  <div style="display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;">
+    <div><div style="font-size:12px;opacity:.7">Total (Today)</div><div id="sb-total" style="font-size:22px;font-weight:600">—</div></div>
+    <div><div style="font-size:12px;opacity:.7">Google Alerts</div><div id="sb-ga" style="font-size:22px;font-weight:600">—</div></div>
+    <div><div style="font-size:12px;opacity:.7">Meltwater</div><div id="sb-mw" style="font-size:22px;font-weight:600">—</div></div>
+    <div><div style="font-size:12px;opacity:.7">RSS Feeds</div><div id="sb-rss" style="font-size:22px;font-weight:600">—</div></div>
+    <div><div style="font-size:12px;opacity:.7">Reddit (MW)</div><div id="sb-reddit" style="font-size:22px;font-weight:600">—</div></div>
+    <div><div style="font-size:12px;opacity:.7">Twitter/X (MW)</div><div id="sb-x" style="font-size:22px;font-weight:600">—</div></div>
+  </div>
+</div>
+<!-- END: Summary Bar -->
+
+<!-- Top Outlets (Today) container; created if missing by script too -->
+<div id="top-outlets" style="max-width:1120px;margin:0 auto 20px auto;font-family:system-ui,Arial,sans-serif"></div>
+
   <header>
     <div class="header-content">
       <h1 class="header-title">Coinbase Monitoring Dashboard</h1>
@@ -574,6 +590,55 @@
 
   // 6) Initial load
   load();
+})();
+</script>
+<script>
+(async function(){
+  // ensure Top Outlets exists
+  (function ensureTop(){ if(!document.getElementById('top-outlets')){ const d=document.createElement('div'); d.id='top-outlets'; d.style.cssText='max-width:1120px;margin:0 auto 20px auto;font-family:system-ui,Arial,sans-serif'; document.body.appendChild(d);} })();
+
+  const res = await fetch('/api/summary?window=today', { cache: 'no-store' }).catch(()=>null);
+  if(!res) return;
+  const data = await res.json().catch(()=>null);
+  if(!data || !data.ok) return;
+
+  const by = (data.totals && data.totals.by_origin) ? data.totals.by_origin : {};
+  const fmt = (n) => (typeof n === 'number' && Number.isFinite(n) && n.toLocaleString) ? n.toLocaleString() : (n ?? '0');
+  const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = fmt(val); };
+
+  setText('sb-total', data.totals?.all);
+  setText('sb-ga',    by.google_alerts);
+  setText('sb-mw',    by.meltwater);
+  setText('sb-rss',   by.rss);
+  setText('sb-reddit',by.reddit);
+  setText('sb-x',     by.x);
+
+  const wrap = document.getElementById('top-outlets');
+  if (!wrap) return;
+  const pubs = data.top_publishers || [];
+  if (!pubs.length) { wrap.innerHTML = ''; return; }
+
+  let html = '<div style="margin:8px 0 12px 0;font-size:18px;font-weight:600;">Top Outlets (Today)</div>';
+  pubs.forEach((p) => {
+    const reach = fmt(p.total_reach ?? 0);
+    html += '<div style="border:1px solid #e5e7eb;border-radius:12px;padding:12px;margin-bottom:12px;">'
+         +    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">'
+         +      '<div style="font-weight:600;">' + (p.publisher || 'Unknown') + '</div>'
+         +      '<div style="font-size:12px;opacity:.7;">Reach: ' + reach + '</div>'
+         +    '</div>'
+         +    '<ul style="padding-left:18px;margin:0;">';
+    (p.articles || []).forEach((a) => {
+      const title = a.title || '(untitled)';
+      const reachTxt = (typeof a.reach === 'number') ? ' <span style="font-size:12px;opacity:.7;">(reach ' + fmt(a.reach) + ')</span>' : '';
+      if (a.link) {
+        html += '<li style="margin:6px 0;"><a href="' + a.link + '" target="_blank" rel="noreferrer" style="text-decoration:underline;">' + title + '</a>' + reachTxt + '</li>';
+      } else {
+        html += '<li style="margin:6px 0;">' + title + reachTxt + '</li>';
+      }
+    });
+    html +=   '</ul></div>';
+  });
+  wrap.innerHTML = html;
 })();
 </script>
 

@@ -53,18 +53,26 @@ export default async function handler(req, res){
 
       // Normalize origin; treat section === "Meltwater" as meltwater when origin is missing
 const rawOrigin = String(m.origin || "").toLowerCase().trim();
-let origin = rawOrigin;
-if (!origin && String(m.section || "").toLowerCase() === "meltwater") origin = "meltwater";
+const section   = String(m.section || "").toLowerCase().trim();
+const provider  = String(m.provider || "").toLowerCase().trim();
+const isMwLike  =
+  section === "meltwater" ||
+  provider === "meltwater" ||
+  (Array.isArray(m.matched) && m.matched.includes("meltwater-alert")) ||
+  (m?.provider_meta?.permalink && String(m.provider_meta.permalink).includes("meltwater")) ||
+  (m?.provider_meta?.links?.app && String(m.provider_meta.links.app).includes("meltwater"));
+
+let origin = rawOrigin || (isMwLike ? "meltwater" : "");
 if (origin === "twitter" || origin === "tweet" || origin === "twitter/x") origin = "x";
 if (!["meltwater","rss","reddit","x"].includes(origin)) origin = "other";
+
 
       total++;
       if (byOrigin[origin] === undefined) byOrigin.other++;
       else byOrigin[origin]++;
 
       // News outlets = meltwater/rss OR items whose section says Meltwater but origin was missing
-const isNews = (origin === "meltwater" || origin === "rss" ||
-               (!rawOrigin && String(m.section || "").toLowerCase() === "meltwater"));
+const isNews = (origin === "meltwater" || origin === "rss" || isMwLike);
 if (isNews) {
 
         const pub = (m.source || "Unknown").trim();

@@ -6,7 +6,7 @@ function startOfTodayET(){
     timeZone: "America/New_York",
     year: "numeric", month: "2-digit", day: "2-digit"
   }).formatToParts(now).reduce((o,p)=>{ if(p.type!=="literal") o[p.type]=p.value; return o; }, {});
-  // Summer EDT offset; good for "today" counting now
+  // EDT offset for summer; fine for "today" tiles
   const iso = `${parts.year}-${parts.month}-${parts.day}T00:00:00-04:00`;
   return Math.floor(new Date(iso).getTime()/1000);
 }
@@ -35,20 +35,17 @@ function isMock(m){
   return false;
 }
 
-// *** Replace-only block: origin detection ***
-// Put this line immediately ABOVE detectOrigin()
+// Domains you see **only** via Google Alerts (expand as needed)
 const GA_SOURCES = new Set([
-  // Domains you see appearing ONLY via Google Alerts
   "wsj.com", "www.wsj.com",
   "barrons.com", "www.barrons.com",
 ]);
 
-// Replace your entire detectOrigin() with this:
 function detectOrigin(m){
-  // 1) Keep explicit origin if present
+  // Explicit origin wins
   if (m && m.origin) return m.origin;
 
-  // 2) Meltwater: multiple hints
+  // Meltwater hints
   const sec  = (m?.section  || "").toLowerCase();
   const prov = (m?.provider || "").toLowerCase();
   const tags = Array.isArray(m?.matched) ? m.matched.map(x => String(x).toLowerCase()) : [];
@@ -56,7 +53,7 @@ function detectOrigin(m){
     return "meltwater";
   }
 
-  // 3) Google Alerts: URL patterns or known GA-only publishers
+  // Google Alerts patterns and GA-only publishers
   try {
     const u = m?.link ? new URL(m.link) : null;
     const host = u ? u.hostname.toLowerCase() : "";
@@ -67,74 +64,58 @@ function detectOrigin(m){
       if (q.includes("ct=ga") || q.includes("tbm=nws")) return "google_alerts";
     }
     if (GA_SOURCES.has(host)) return "google_alerts";
-  } catch {}
+  } catch {} // never break on bad URLs
 
-  // Also classify by source text if present
   const src = (m?.source || "").toLowerCase();
-  if (src.includes("google alerts") || src === "google") return "google_alerts";
+  if (src.includes("google alerts") || src === "google" || src === "google news") {
+    return "google_alerts";
+  }
 
-  // 4) Optional social buckets (only if your items use them)
+  // Optional social buckets if your items use them
   if (sec === "reddit" || src === "reddit") return "reddit";
   if (sec === "x" || src === "x" || src === "twitter") return "x";
 
-  // 5) Default
-  return "rss";
-}
-
-  // 3) Google Alerts: URL patterns and common labels
-  try {
-    const u = m?.link ? new URL(m.link) : null;
-    const host = u ? u.hostname.toLowerCase() : "";
-    if (/(^|\.)news\.google\./.test(host)) return "google_alerts";
-    if (/(^|\.)feedproxy\.google\./.test(host)) return "google_alerts";
-    if (host === "www.google.com") {
-      const q = u.search || "";
-      if (q.includes("ct=ga") || q.includes("tbm=nws")) return "google_alerts";
-    }
-  } catch {}
-
-  const src = (m?.source || "").toLowerCase();
-  if (src.includes("google alerts") || src === "google") return "google_alerts";
-
-  // 4) Optional: honor common social buckets if your items set them
-  if ((m?.section||"").toLowerCase()==="reddit" || src==="reddit") return "reddit";
-  if ((m?.section||"").toLowerCase()==="x" || src==="x" || src==="twitter") return "x";
-
-  // 5) Default
+  // Default
   return "rss";
 }
 
 export default async function handler(req, res){
+  // Always return ok:true on success path so tiles don’t show dashes
   try{
-    // Build absolute URL to your existing feed so we count exactly what the page shows
     const host  = req.headers["x-forwarded-host"] || req.headers.host;
     const proto = req.headers["x-forwarded-proto"] || "https";
     const url   = `${proto}://${host}/api/get_mentions?limit=1000&nocache=1&_=${Date.now()}`;
 
+    // Fetch the same feed the page uses
     const r = await fetch(url, { cache: "no-store", headers: { "accept": "application/json" } });
     if (!r.ok) {
-      res.status(502).json({ ok:false, error:`get_mentions ${r.status}` });
-      return;
+      return res.status(200).json({
+        ok: true,
+        window: "today",
+        totals: { all: 0, by_origin: { meltwater:0, google_alerts:0, rss:0, reddit:0, x:0, other:0 } },
+        top_publishers: [],
+        note: `get_mentions returned ${r.status}`
+      });
     }
 
-    let list = await r.json();
-    // /api/get_mentions returns an array in your repo; handle {items:[]} just in case
+    let list;
+    try { list = await r.json(); } catch { list = []; }
     if (!Array.isArray(list) && list && Array.isArray(list.items)) list = list.items;
     if (!Array.isArray(list)) list = [];
 
     const startToday = startOfTodayET();
 
-    // Keep today's items by each item's own timestamp; drop known test rows
+    // Keep today's; drop known test rows
     const today = list.filter(m => toTs(m) >= startToday && !isMock(m));
 
-    // Tally by origin
+    // Tally
     const by_origin = { meltwater:0, google_alerts:0, rss:0, reddit:0, x:0, other:0 };
     for (const m of today){
       const o = detectOrigin(m);
       if (by_origin[o] == null) by_origin.other++; else by_origin[o]++;
     }
 
-    // Top publishers (Meltwater only), using Reach if present
+    // Top publishers (Meltwater)
     const pubs = new Map();
     for (const m of today){
       if (detectOrigin(m) !== "meltwater") continue;
@@ -151,21 +132,23 @@ export default async function handler(req, res){
       articles: arr.slice(0,5)
     })).sort((a,b)=> (b.total_reach||0)-(a.total_reach||0)).slice(0,5);
 
-    res.status(200).json({
+    return res.status(200).json({
       ok: true,
       window: "today",
       totals: { all: today.length, by_origin },
       top_publishers,
       generated_at: new Date().toISOString()
     });
-  }catch(e){
-    // Return safe payload so tiles render; include error message for debugging
-    res.status(200).json({
-      ok: false,
+
+  } catch (e){
+    // Never 500 → return ok:true with zeros so UI shows 0s (not dashes)
+    return res.status(200).json({
+      ok: true,
       window: "today",
       totals: { all: 0, by_origin: { meltwater:0, google_alerts:0, rss:0, reddit:0, x:0, other:0 } },
       top_publishers: [],
-      error: e?.message || String(e)
+      note: "summary fallback",
+      error_message: e?.message || String(e)
     });
   }
 }

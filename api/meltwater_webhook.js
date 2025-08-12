@@ -97,11 +97,14 @@ export default async function handler(req, res){
   try{
     if (req.method !== "POST") return res.status(405).send("Use POST");
 
-    // shared-secret
-    if (process.env.MW_WEBHOOK_SECRET) {
-      const got = (req.headers["x-mw-secret"] || "").toString().trim();
-      if (!got || got !== process.env.MW_WEBHOOK_SECRET) return res.status(401).send("bad secret");
-    }
+    // shared-secret check (accept header OR ?key= in URL)
+if (process.env.MW_WEBHOOK_SECRET) {
+  const urlObj = new URL(req.url, "http://localhost");
+  const fromQuery = urlObj.searchParams.get("key");
+  const fromHeader = req.headers["x-mw-secret"];
+  const got = (fromHeader || fromQuery || "").toString().trim();
+  if (!got || got !== process.env.MW_WEBHOOK_SECRET) { res.status(401).send("bad secret"); return; }
+}
 
     const urlObj = new URL(req.url, "http://localhost");
     const forceParam = urlObj.searchParams.get("force");

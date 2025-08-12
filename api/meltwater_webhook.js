@@ -145,7 +145,37 @@ function classify(it){
 // ---------- handler ----------
 export default async function handler(req, res){
   try{
-    if (req.method !== "POST") return res.status(405).send("Use POST");
+    if (req.method !== "POST") { res.status(405).send("Use POST"); return; }
+
+    // unified secret check (header OR ?key), trims both sides, supports SECRET or TOKEN
+    const SECRET_VAL = ((process.env.MW_WEBHOOK_SECRET || process.env.MW_WEBHOOK_TOKEN) || "").toString().trim();
+    {
+      const urlObj = new URL(req.url, "http://localhost");
+      const qKey   = ((urlObj.searchParams.get("key") || "") + "").trim();
+      const hKey   = ((req.headers["x-mw-secret"] || "") + "").trim();
+      const got    = hKey || qKey; // header wins if present
+      const dbg    = urlObj.searchParams.get("dbg") === "1"; // optional: ?dbg=1
+
+      if (SECRET_VAL) {
+        if (!got || got !== SECRET_VAL) {
+          if (dbg) {
+            return res.status(401).json({
+              ok: false,
+              why: "bad secret",
+              using: process.env.MW_WEBHOOK_SECRET ? "MW_WEBHOOK_SECRET" :
+                     (process.env.MW_WEBHOOK_TOKEN ? "MW_WEBHOOK_TOKEN" : null),
+              got_len: got.length,
+              secret_len: SECRET_VAL.length,
+              got_first: got.slice(0,1),
+              got_last:  got.slice(-1),
+              secret_first: SECRET_VAL.slice(0,1),
+              secret_last:  SECRET_VAL.slice(-1)
+            });
+          }
+          return res.status(401).send("bad secret");
+        }
+      }
+    }
 // shared-secret check (accept header OR ?key= in URL), supports SECRET or TOKEN
 const SECRET = process.env.MW_WEBHOOK_SECRET || process.env.MW_WEBHOOK_TOKEN;
 if (SECRET) {

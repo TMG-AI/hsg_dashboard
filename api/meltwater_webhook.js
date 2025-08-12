@@ -19,6 +19,7 @@ const SEEN_SENT     = "mw:sentiment:seen";
 function normalizeUrl(u){
   try{
     const url = new URL(u);
+    // unwrap Meltwater redirect links
     if (/t\.notifications\.meltwater\.com/i.test(url.hostname) && url.searchParams.get("u")) {
       return normalizeUrl(decodeURIComponent(url.searchParams.get("u")));
     }
@@ -147,7 +148,7 @@ export default async function handler(req, res){
   try{
     if (req.method !== "POST") { res.status(405).send("Use POST"); return; }
 
-    // unified secret check (header OR ?key), trims both sides, supports SECRET or TOKEN
+    // ONE unified secret check (header OR ?key). Remove all other secret checks.
     const SECRET_VAL = ((process.env.MW_WEBHOOK_SECRET || process.env.MW_WEBHOOK_TOKEN) || "").toString().trim();
     {
       const urlObj = new URL(req.url, "http://localhost");
@@ -176,23 +177,6 @@ export default async function handler(req, res){
         }
       }
     }
-// shared-secret check (accept header OR ?key= in URL), supports SECRET or TOKEN
-const SECRET = process.env.MW_WEBHOOK_SECRET || process.env.MW_WEBHOOK_TOKEN;
-if (SECRET) {
-  const urlObj = new URL(req.url, "http://localhost");
-  const fromQuery  = (urlObj.searchParams.get("key") || "").toString().trim();
-  const fromHeader = (req.headers["x-mw-secret"] || "").toString().trim();
-  const got = fromHeader || fromQuery;
-  if (!got || got !== SECRET) { res.status(401).send("bad secret"); return; }
-}
-    // shared-secret (accept header OR ?key=)
-    if (process.env.MW_WEBHOOK_SECRET) {
-      const urlObj = new URL(req.url, "http://localhost");
-      const fromQuery  = urlObj.searchParams.get("key");
-      const fromHeader = req.headers["x-mw-secret"];
-      const got = (fromHeader || fromQuery || "").toString().trim();
-      if (!got || got !== process.env.MW_WEBHOOK_SECRET) { res.status(401).send("bad secret"); return; }
-    }
 
     const urlObj = new URL(req.url, "http://localhost");
     const forceParam = urlObj.searchParams.get("force");
@@ -212,7 +196,6 @@ if (SECRET) {
       const mwKey = f.mwId ? String(f.mwId) : normalizeTitleKey(f.title);
 
       if (cls.kind === "spike") {
-        // de-dupe spikes on mw id or title key + date
         const dayKey = `${new Date(ts*1000).toISOString().slice(0,10)}:${mwKey}`;
         const first = await redis.sadd(SEEN_SPIKE, f.mwId ? mwKey : dayKey);
         if (first === 1 || force) {

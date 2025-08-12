@@ -142,6 +142,11 @@
   <h2 class="section-title" style="margin-top:6px">🚨 Active Spikes (Today)</h2>
   <div id="spike-container" class="spike-grid"></div>
 </div>
+  <!-- Sentiment Shift (Meltwater) -->
+<div class="spike-section" id="sent-section" style="display:none;border-color:#90caf9">
+  <h2 class="section-title" style="margin-top:6px">🧭 Sentiment Shift (Today)</h2>
+  <div id="sent-container"></div>
+</div>
   <div class="wrap">
     <div class="controls">
       <label for="search">Search</label>
@@ -368,6 +373,65 @@
   }
   hideByValueId('sb-reddit');
   hideByValueId('sb-x');
+})();
+</script>
+  <script>
+(async function(){
+  // ---- Spikes (uses your existing #spike-section / #spike-container) ----
+  try{
+    const sec  = document.getElementById('spike-section');
+    const grid = document.getElementById('spike-container');
+    if (sec && grid){
+      const r = await fetch('/api/spike_detection?window=today', { cache:'no-store' });
+      const data = await r.json().catch(()=>({}));
+      const spikes = Array.isArray(data?.spikes) ? data.spikes : [];
+      if (!spikes.length){
+        sec.style.display = 'none';
+      }else{
+        sec.style.display = '';
+        grid.innerHTML = spikes.map(s => {
+          const pct = (s.spike_percentage != null) ? `↑${s.spike_percentage}%` : '';
+          const mentions = (s.mention_count ? s.mention_count.toLocaleString() + ' mentions • ' : '');
+          const when = new Date(s.detected_at || Date.now()).toLocaleTimeString();
+          const link = s.link ? `<div style="margin-top:6px;"><a target="_blank" rel="noreferrer" href="${s.link}" style="text-decoration:underline;">Open in Meltwater</a></div>` : '';
+          return `
+            <div class="spike-card">
+              <div class="spike-hdr">
+                <span class="spike-platform">${(s.platform||'SOCIAL').toUpperCase()}</span>
+                <span class="spike-pct">${pct}</span>
+              </div>
+              <div class="spike-title">${s.title || '(untitled)'}</div>
+              <p class="spike-meta">${mentions}${when}</p>
+              ${link}
+            </div>`;
+        }).join('');
+      }
+    }
+  }catch(e){ console.warn('spikes load error', e); }
+
+  // ---- Sentiment (optional; requires Step 2 container) ----
+  try{
+    const sec  = document.getElementById('sent-section');
+    const box  = document.getElementById('sent-container');
+    if (sec && box){
+      const r = await fetch('/api/sentiment_overview?window=today', { cache:'no-store' });
+      const data = await r.json().catch(()=>({}));
+      const s = data?.latest || null;
+      if (!s){
+        sec.style.display = 'none';
+      }else{
+        sec.style.display = '';
+        const when = new Date(s.detected_at || Date.now()).toLocaleTimeString();
+        const link = s.link ? `<div style="margin-top:6px;"><a target="_blank" rel="noreferrer" href="${s.link}" style="text-decoration:underline;">Details in Meltwater</a></div>` : '';
+        box.innerHTML = `
+          <div style="border:1px solid #90caf9;background:linear-gradient(135deg,#e1f5fe,#e3f2fd);border-radius:12px;padding:12px;">
+            <div style="font-weight:600;margin-bottom:6px;">${s.title || 'Sentiment shift detected'}</div>
+            <div style="font-size:12px;opacity:.7;">Direction: <b>${s.direction || '—'}</b> • ${when}</div>
+            ${link}
+          </div>`;
+      }
+    }
+  }catch(e){ console.warn('sentiment load error', e); }
 })();
 </script>
 </body>

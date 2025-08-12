@@ -146,7 +146,15 @@ function classify(it){
 export default async function handler(req, res){
   try{
     if (req.method !== "POST") return res.status(405).send("Use POST");
-
+// shared-secret check (accept header OR ?key= in URL), supports SECRET or TOKEN
+const SECRET = process.env.MW_WEBHOOK_SECRET || process.env.MW_WEBHOOK_TOKEN;
+if (SECRET) {
+  const urlObj = new URL(req.url, "http://localhost");
+  const fromQuery  = (urlObj.searchParams.get("key") || "").toString().trim();
+  const fromHeader = (req.headers["x-mw-secret"] || "").toString().trim();
+  const got = fromHeader || fromQuery;
+  if (!got || got !== SECRET) { res.status(401).send("bad secret"); return; }
+}
     // shared-secret (accept header OR ?key=)
     if (process.env.MW_WEBHOOK_SECRET) {
       const urlObj = new URL(req.url, "http://localhost");

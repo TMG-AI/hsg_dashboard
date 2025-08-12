@@ -107,7 +107,22 @@ export default async function handler(req, res){
     const forceParam = urlObj.searchParams.get("force");
     const force = (forceParam === "1" || forceParam === "true");
 
-    const rawBody = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
+   let rawBody = req.body;
+// accept strings, including ones that start with '=' from n8n
+if (typeof rawBody === "string") {
+  let s = rawBody.trim();
+  if (s.startsWith("=")) s = s.slice(1);           // strip leading '='
+  // if it came double-quoted (e.g., "\"{...}\""), unquote once
+  if (s.startsWith('"') && s.endsWith('"')) {
+    try { s = JSON.parse(s); } catch { /* keep s as-is */ }
+  }
+  if (typeof s === "string") {
+    try { rawBody = JSON.parse(s); }
+    catch { rawBody = {}; } // fall through; extractor will return []
+  } else {
+    rawBody = s;
+  }
+}
     const items = extractItems(rawBody);
 
     if (!items.length){

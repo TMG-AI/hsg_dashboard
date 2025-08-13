@@ -1,59 +1,69 @@
+// /api/get_mentions.js
 import { Redis } from "@upstash/redis";
-const redis = new Redis({ url: process.env.KV_REST_API_URL, token: process.env.KV_REST_API_TOKEN });
+
+const redis = new Redis({
+  url: process.env.KV_REST_API_URL,
+  token: process.env.KV_REST_API_TOKEN,
+});
+
 const ZSET = "mentions:z";
 
-function looksLikeMention(o) {
-  return o && typeof o === "object" &&
-    ("title" in o) && ("link" in o) && ("source" in o) &&
-    ("published" in o || "published_ts" in o);
+function toObj(x){
+  if (!x) return null;
+  if (typeof x === "object" && x.id) return x;
+  try { return JSON.parse(typeof x === "string" ? x : x.toString("utf-8")); }
+  catch { return null; }
 }
-function toStringAny(v) {
-  if (typeof v === "string") return v;
-  if (Buffer.isBuffer(v))   return v.toString("utf-8");
-  if (v == null)            return "";
-  return JSON.stringify(v);
-}
-function normalizeUrl(u){
+
+export default async function handler(req, res){
   try{
-    const url=new URL(u); url.hash="";
-    ["utm_source","utm_medium","utm_campaign","utm_term","utm_content","utm_id","mc_cid","mc_eid","ref","fbclid","gclid","igshid"].forEach(p=>url.searchParams.delete(p));
-    if ([...url.searchParams.keys()].length===0) url.search="";
-    url.hostname = url.hostname.toLowerCase();
-    let s = url.toString(); if (s.endsWith("/")) s=s.slice(0,-1);
-    return s;
-  }catch{return (u||"").trim();}
-}
+    const url = new URL(req.url, "http://localhost");
+    const limit  = Math.max(1, Math.min(1000, parseInt(url.searchParams.get("limit") || "300", 10)));
+    const origin = (url.searchParams.get("origin") || "").toLowerCase().trim(); // e.g. "meltwater"
+    const section= (url.searchParams.get("section")||"").trim();
+    const q      = (url.searchParams.get("q")||"").toLowerCase().trim();
 
-export default async function handler(req, res) {
-  try {
-    const q = req.query || {};
-    const limit = Math.max(1, Math.min(1000, parseInt(q.limit || "200", 10)));
-    const sectionFilter = (q.section || "").trim(); // optional ?section=Top%20Crypto%20News
-
-    // Newest first; members only
+    // newest first
     const raw = await redis.zrange(ZSET, 0, limit - 1, { rev: true });
-    const parsed = [];
-    for (const row of raw || []) {
-      if (looksLikeMention(row)) { parsed.push(row); continue; }
-      const s = toStringAny(row);
-      try { parsed.push(JSON.parse(s)); } catch {}
-    }
+    let items = raw.map(toObj).filter(Boolean);
 
-    // Distinct by canonical URL
-    const seenCanon = new Set();
-    const unique = [];
-    for (const m of parsed) {
-      const canon = m.canon || normalizeUrl(m.link || "");
-      if (canon && seenCanon.has(canon)) continue;
-      seenCanon.add(canon);
-      unique.push(m);
-    }
+    // filters
+    if (origin)  items = items.filter(m => (m.origin||"").toLowerCase() === origin);
+    if (section) items = items.filter(m => (m.section||"") === section);
+    if (q)       items = items.filter(m => ((m.title||"").toLowerCase().includes(q) || (m.source||"").toLowerCase().includes(q)));
 
-    const filtered = sectionFilter ? unique.filter(m => (m.section || "Other") === sectionFilter) : unique;
+    // ensure fields front-end expects, including reach & sentiment
+    const out = items.map(m => {
+      const reach = (typeof m.reach === "number")
+        ? m.reach
+        : (typeof m.provider_meta?.reach === "number" ? m.provider_meta.reach : 0);
 
-    res.setHeader("Content-Type", "application/json; charset=utf-8");
-    res.status(200).send(JSON.stringify(filtered));
-  } catch (e) {
-    res.status(500).json({ ok: false, error: `get_mentions failed: ${e?.message || e}` });
+      const sentiment = (typeof m.sentiment === "number")
+        ? m.sentiment
+        : (typeof m.provider_meta?.sentiment === "number" ? m.provider_meta.sentiment : undefined);
+
+      const sentiment_label = m.sentiment_label || m.provider_meta?.sentiment_label || null;
+
+      return {
+        id: m.id,
+        title: m.title || "(untitled)",
+        link: m.link || null,
+        source: m.source || "",
+        section: m.section || "",
+        origin: m.origin || "",
+        matched: Array.isArray(m.matched) ? m.matched : [],
+        published: m.published || (m.published_ts ? new Date(m.published_ts*1000).toISOString() : null),
+        published_ts: typeof m.published_ts === "number" ? m.published_ts : (m.published ? Math.floor(Date.parse(m.published)/1000) : 0),
+
+        // NEW: expose to UI
+        reach,
+        sentiment,         // -1, 0, 1 (or undefined if not present)
+        sentiment_label,   // "Positive" | "Neutral" | "Negative" | null
+      };
+    });
+
+    res.status(200).json(out);
+  }catch(e){
+    res.status(500).json({ ok:false, error: e?.message || String(e) });
   }
 }

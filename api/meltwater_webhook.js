@@ -118,8 +118,41 @@ export default async function handler(req, res){
     }
     if (req.method !== "POST"){ res.status(405).send("Use POST"); return; }
 
-    // unified secret check: header x-mw-secret OR ?key=
-    const SECRET = ((process.env.MW_WEBHOOK_SECRET || process.env.MW_WEBHOOK_TOKEN) || "").toString().trim();
+    // unified secret check: header x-mw-secret OR ?key=   (with dbg support)
+{
+  const SECRET_RAW = (process.env.MW_WEBHOOK_SECRET || process.env.MW_WEBHOOK_TOKEN || "").toString();
+  const u   = new URL(req.url, "http://localhost");
+  const q   = (u.searchParams.get("key") || "").toString();
+  const h   = (req.headers["x-mw-secret"] || "").toString();
+  const got = h || q; // header wins if present
+
+  // normalize by trimming only spaces/newlines
+  const SECRET = SECRET_RAW.trim();
+  const GOT    = got.trim();
+
+  const dbg = u.searchParams.get("dbg") === "1";
+
+  if (SECRET) {
+    if (!GOT || GOT !== SECRET) {
+      if (dbg) {
+        return res.status(401).json({
+          ok: false,
+          why: "bad secret",
+          using: process.env.MW_WEBHOOK_SECRET ? "MW_WEBHOOK_SECRET"
+               : (process.env.MW_WEBHOOK_TOKEN ? "MW_WEBHOOK_TOKEN" : null),
+          got_len: GOT.length,
+          secret_len: SECRET.length,
+          got_first: GOT.slice(0,1) || null,
+          got_last:  GOT.slice(-1)  || null,
+          secret_first: SECRET.slice(0,1) || null,
+          secret_last:  SECRET.slice(-1)  || null
+        });
+      }
+      return res.status(401).send("bad secret");
+    }
+  }
+}
+// end secret check
     if (SECRET){
       const u = new URL(req.url, "http://localhost");
       const q = ((u.searchParams.get("key") || "") + "").trim();

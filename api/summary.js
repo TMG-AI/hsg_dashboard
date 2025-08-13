@@ -71,7 +71,7 @@ export default async function handler(req, res){
 
     // Upstash JS client: zrange by score
     // Returns newest..oldest? We'll get all and filter in code.
-    const raw = await redis.zrange(ZSET, start, end, { byscore: true });
+    const raw = await redis.zRangeByScore(ZSET, start, end);
     const items = raw.map(toObj).filter(Boolean);
 
     // Filter to window by published_ts if present, otherwise trust zset score

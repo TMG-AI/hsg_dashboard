@@ -38,8 +38,6 @@ function toEpoch(d){
     if (m) t = Date.parse(`${m[1]}T${m[2]}Z`);
   }
   let sec = Math.floor((Number.isFinite(t) ? t : Date.now())/1000);
-  const now = Math.floor(Date.now()/1000);
-  if (sec > now) sec = now;
   return sec;
 }
 function parseReach(s){

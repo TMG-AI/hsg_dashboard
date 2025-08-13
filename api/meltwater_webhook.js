@@ -3,31 +3,27 @@ import { Redis } from "@upstash/redis";
 
 const redis = new Redis({
   url: process.env.KV_REST_API_URL,
-  token: process.env.KV_REST_API_TOKEN
+  token: process.env.KV_REST_API_TOKEN,
 });
 
+// primary mentions set (the dashboard already reads this)
 const ZSET_MENTIONS = "mentions:z";
-const ZSET_SPIKES   = "mw:spikes:z";
-const ZSET_SENT     = "mw:sentiment:z";
 
-const SEEN_MW       = "mentions:seen:mw";
-const SEEN_URL      = "mentions:seen:canon";
-const SEEN_SPIKE    = "mw:spikes:seen";
-const SEEN_SENT     = "mw:sentiment:seen";
+// de-dupe sets
+const SEEN_MW  = "mentions:seen:mw";    // by Meltwater id
+const SEEN_URL = "mentions:seen:canon";  // by canonical URL
 
-// ---------- helpers ----------
+/* ---------------- helpers ---------------- */
 function normalizeUrl(u){
   try{
     const url = new URL(u);
-    // unwrap Meltwater redirect links
+    // unwrap Meltwater redirect links if present
     if (/t\.notifications\.meltwater\.com/i.test(url.hostname) && url.searchParams.get("u")) {
       return normalizeUrl(decodeURIComponent(url.searchParams.get("u")));
     }
     url.hash = "";
-    [
-      "utm_source","utm_medium","utm_campaign","utm_term","utm_content","utm_id",
-      "mc_cid","mc_eid","ref","fbclid","gclid","igshid"
-    ].forEach(p=>url.searchParams.delete(p));
+    ["utm_source","utm_medium","utm_campaign","utm_term","utm_content","utm_id",
+     "mc_cid","mc_eid","ref","fbclid","gclid","igshid"].forEach(p=>url.searchParams.delete(p));
     if (![...url.searchParams.keys()].length) url.search = "";
     url.hostname = url.hostname.toLowerCase();
     let s = url.toString();
@@ -39,7 +35,7 @@ function hostFromUrl(u){ try { return new URL(u).hostname.toLowerCase(); } catch
 function idFromCanonical(canon){ let h=0; for (let i=0;i<canon.length;i++) h=(h*31+canon.charCodeAt(i))>>>0; return `m_${h.toString(16)}`; }
 function toEpoch(d){
   let t = Date.parse(d||"");
-  if (!Number.isFinite(t) && d) {
+  if (!Number.isFinite(t) && d){
     const m = /^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2})$/.exec(String(d));
     if (m) t = Date.parse(`${m[1]}T${m[2]}Z`);
   }
@@ -48,38 +44,8 @@ function toEpoch(d){
   if (sec > now) sec = now;
   return sec;
 }
-function parseReach(s){
-  if (!s) return 0;
-  const m = String(s).match(/([\d.,]+)\s*([KMB])?\s*(?:Reach|mentions)/i);
-  if (!m) return 0;
-  let n = parseFloat(m[1].replace(/,/g,""));
-  const u = (m[2]||"").toUpperCase();
-  if (u==="K") n*=1e3; if (u==="M") n*=1e6; if (u==="B") n*=1e9;
-  return Math.round(n);
-}
-function parseSpikeInfo(s){
-  if (!s) return { mentions:null, pct:null };
-  const m1 = String(s).match(/([\d,]+)\s+(?:Social\s+)?mentions/i);
-  const mentions = m1 ? parseInt(m1[1].replace(/,/g,""),10) : null;
-  const m2 = String(s).match(/[↑+]\s*([0-9]+(?:\.[0-9]+)?)\s*%/);
-  const pct = m2 ? Math.round(parseFloat(m2[1])) : null;
-  return { mentions, pct };
-}
-function parseSentimentDir(t,txt,sl){
-  const hay = [t,txt,sl].filter(Boolean).join(" ").toLowerCase();
-  if (hay.includes("more positive") || hay.includes("positive shift")) return "positive";
-  if (hay.includes("more negative") || hay.includes("negative shift")) return "negative";
-  return null;
-}
-function normalizeTitleKey(t){
-  let s = String(t||"").toLowerCase();
-  s = s.replace(/[\u2018\u2019\u201C\u201D]/g,"'").replace(/[\u2013\u2014]/g,"-");
-  s = s.split(" - ")[0].split(" — ")[0].split(" | ")[0];
-  s = s.replace(/["'“”‘’()[\]]/g," ").replace(/\s+/g," ").trim();
-  return s;
-}
 
-// pick basic fields for news/mentions
+/* pick the fields we need from a Meltwater item */
 function pickFields(it){
   const title = it.title || it.headline || it.summaryTitle || "(untitled)";
   const linkRaw =
@@ -93,153 +59,93 @@ function pickFields(it){
     it.published_at || it.date || it.published || new Date().toISOString();
   const mwId = it.id || it.document_id || it.documentId || null;
   const mwPermalink = it.permalink || (it.links && it.links.app) || null;
-  const reach = parseReach(it.statusLine || it.reach || "");
-  return { title, link, source, publishedISO, mwId, mwPermalink, reach };
+
+  return { title, link, source, publishedISO, mwId, mwPermalink };
 }
 
-// accept many body shapes; tolerate n8n quirks
+/* accept JSON, n8n-style wrappers, or form-encoded bodies with payload/data */
 function extractBody(req){
-  let rawBody = req.body;
-  if (typeof rawBody === "string") {
-    let s = rawBody.trim();
+  let raw = req.body;
+
+  // strings (including ="...") → try JSON
+  if (typeof raw === "string"){
+    let s = raw.trim();
     if (s.startsWith("=")) s = s.slice(1);
     if (s.startsWith('"') && s.endsWith('"')) { try { s = JSON.parse(s); } catch {} }
-    if (typeof s === "string") { try { rawBody = JSON.parse(s); } catch { rawBody = {}; } }
-    else { rawBody = s; }
+    if (typeof s === "string"){ try { raw = JSON.parse(s); } catch { raw = {}; } }
+    else raw = s;
   }
-  return rawBody;
+
+  const ctype = (req.headers["content-type"] || "").toLowerCase();
+  if (ctype.includes("application/x-www-form-urlencoded")){
+    // Next/Vercel gives an object. Find a JSON string inside common keys.
+    if (raw && typeof raw === "object" && !Array.isArray(raw)){
+      const inner = raw.payload || raw.data || raw.json || raw.body || raw.result || null;
+      if (typeof inner === "string"){
+        try { return JSON.parse(inner); } catch { return {}; }
+      }
+    }
+  }
+
+  // unwrap common wrappers
+  if (raw && typeof raw === "object"){
+    if (raw.body && typeof raw.body === "object")    return raw.body;
+    if (raw.data && typeof raw.data === "object")    return raw.data;
+    if (raw.payload && typeof raw.payload === "object") return raw.payload;
+  }
+
+  return raw || {};
 }
+
+/* turn a body into a flat list of items */
 function extractItems(body){
   const root = (body && (body.body || body.data || body.payload)) || body;
-  if (Array.isArray(root)) return root;
-  if (Array.isArray(root?.results)) return root.results;
-  if (Array.isArray(root?.items))   return root.items;
-  if (root?.result) return [root.result];
+  if (Array.isArray(root))             return root;
+  if (Array.isArray(root?.results))    return root.results;
+  if (Array.isArray(root?.items))      return root.items;
+  if (root?.result)                    return [root.result];
   if (root && (root.title || root.headline || root.url || root.link || root.permalink || root.links)) return [root];
   return [];
 }
 
-// classify special Meltwater insights
-function classify(it){
-  const t = (it.title || "").toLowerCase();
-  const sl = (it.statusLine || "").toLowerCase();
-  const txt = (it.text || "").toLowerCase();
-  const type = (it.type || it.providerType || "").toLowerCase();
-
-  // spikes
-  if (t.includes("spike") || sl.includes("mentions") || type.includes("spike")) {
-    const { mentions, pct } = parseSpikeInfo(it.statusLine || it.text || it.title);
-    let platform = "social";
-    if (t.includes("x repost") || t.includes("twitter")) platform = "x";
-    if (t.includes("reddit")) platform = "reddit";
-    return { kind:"spike", info:{ mentions, pct, platform } };
-  }
-
-  // sentiment shift
-  if (t.includes("sentiment shift") || type.includes("sentiment")) {
-    return { kind:"sentiment", info:{ direction: parseSentimentDir(it.title, it.text, it.statusLine) } };
-  }
-
-  return { kind:"news", info:{} };
-}
-
-// ---------- handler ----------
+/* ---------------- handler ---------------- */
 export default async function handler(req, res){
   try{
-    if (req.method !== "POST") { res.status(405).send("Use POST"); return; }
+    if (req.method === "GET"){
+      // simple health ping for your browser
+      const hasSecret = !!(process.env.MW_WEBHOOK_SECRET || process.env.MW_WEBHOOK_TOKEN);
+      return res.status(200).json({ ok:true, route:"/api/meltwater_webhook", accepts:"POST", secret_set:hasSecret });
+    }
+    if (req.method !== "POST"){ res.status(405).send("Use POST"); return; }
 
-    // ONE unified secret check (header OR ?key). Remove all other secret checks.
-    const SECRET_VAL = ((process.env.MW_WEBHOOK_SECRET || process.env.MW_WEBHOOK_TOKEN) || "").toString().trim();
-    {
-      const urlObj = new URL(req.url, "http://localhost");
-      const qKey   = ((urlObj.searchParams.get("key") || "") + "").trim();
-      const hKey   = ((req.headers["x-mw-secret"] || "") + "").trim();
-      const got    = hKey || qKey; // header wins if present
-      const dbg    = urlObj.searchParams.get("dbg") === "1"; // optional: ?dbg=1
-
-      if (SECRET_VAL) {
-        if (!got || got !== SECRET_VAL) {
-          if (dbg) {
-            return res.status(401).json({
-              ok: false,
-              why: "bad secret",
-              using: process.env.MW_WEBHOOK_SECRET ? "MW_WEBHOOK_SECRET" :
-                     (process.env.MW_WEBHOOK_TOKEN ? "MW_WEBHOOK_TOKEN" : null),
-              got_len: got.length,
-              secret_len: SECRET_VAL.length,
-              got_first: got.slice(0,1),
-              got_last:  got.slice(-1),
-              secret_first: SECRET_VAL.slice(0,1),
-              secret_last:  SECRET_VAL.slice(-1)
-            });
-          }
-          return res.status(401).send("bad secret");
-        }
-      }
+    // unified secret check: header x-mw-secret OR ?key=
+    const SECRET = ((process.env.MW_WEBHOOK_SECRET || process.env.MW_WEBHOOK_TOKEN) || "").toString().trim();
+    if (SECRET){
+      const u = new URL(req.url, "http://localhost");
+      const q = ((u.searchParams.get("key") || "") + "").trim();
+      const h = ((req.headers["x-mw-secret"] || "") + "").trim();
+      const got = h || q; // header wins if present; Meltwater can use ?key
+      if (!got || got !== SECRET){ res.status(401).send("bad secret"); return; }
     }
 
-    const urlObj = new URL(req.url, "http://localhost");
-    const forceParam = urlObj.searchParams.get("force");
-    const force = (forceParam === "1" || forceParam === "true");
+    // optional ?force=1 to skip dedupe during testing
+    const u2 = new URL(req.url, "http://localhost");
+    const force = (u2.searchParams.get("force")==="1" || u2.searchParams.get("force")==="true");
 
     const body  = extractBody(req);
     const items = extractItems(body);
-    if (!items.length) return res.status(200).json({ ok:true, stored:0, note:"no items" });
+    if (!items.length){
+      return res.status(200).json({ ok:true, stored:0, note:"no items", saw:Object.keys(body||{}) });
+    }
 
-    let stored_news = 0, stored_spikes = 0, stored_sent = 0;
-
+    let stored = 0;
     for (const it of items){
-      const cls = classify(it);
       const f = pickFields(it);
       const canon = normalizeUrl(f.link || f.title);
-      const ts = toEpoch(f.publishedISO);
-      const mwKey = f.mwId ? String(f.mwId) : normalizeTitleKey(f.title);
-
-      if (cls.kind === "spike") {
-        const dayKey = `${new Date(ts*1000).toISOString().slice(0,10)}:${mwKey}`;
-        const first = await redis.sadd(SEEN_SPIKE, f.mwId ? mwKey : dayKey);
-        if (first === 1 || force) {
-          const spike = {
-            id: f.mwId ? `sp_${f.mwId}` : `sp_${idFromCanonical(canon)}`,
-            title: f.title,
-            platform: cls.info.platform || "social",
-            spike_percentage: cls.info.pct,
-            mention_count: cls.info.mentions,
-            link: f.mwPermalink || f.link || null,
-            detected_at: new Date(ts*1000).toISOString(),
-            ts,
-            origin:"meltwater", provider:"Meltwater"
-          };
-          await redis.zadd(ZSET_SPIKES, { score: ts, member: JSON.stringify(spike) });
-          stored_spikes++;
-        }
-        continue;
-      }
-
-      if (cls.kind === "sentiment") {
-        const dayKey = `${new Date(ts*1000).toISOString().slice(0,10)}:${mwKey}`;
-        const first = await redis.sadd(SEEN_SENT, f.mwId ? mwKey : dayKey);
-        if (first === 1 || force) {
-          const sent = {
-            id: f.mwId ? `se_${f.mwId}` : `se_${idFromCanonical(canon)}`,
-            title: f.title,
-            direction: cls.info.direction, // "positive"/"negative"/null
-            link: f.mwPermalink || f.link || null,
-            detected_at: new Date(ts*1000).toISOString(),
-            ts,
-            origin:"meltwater", provider:"Meltwater"
-          };
-          await redis.zadd(ZSET_SENT, { score: ts, member: JSON.stringify(sent) });
-          stored_sent++;
-        }
-        continue;
-      }
-
-      // default: news/mention
       if (!canon) continue;
 
-      if (!force) {
-        if (f.mwId) {
+      if (!force){
+        if (f.mwId){
           const first = await redis.sadd(SEEN_MW, String(f.mwId));
           if (first !== 1) continue;
         } else {
@@ -248,9 +154,11 @@ export default async function handler(req, res){
         }
       }
 
-      const mid = f.mwId ? `mw_${String(f.mwId)}` : idFromCanonical(canon);
+      const id  = f.mwId ? `mw_${String(f.mwId)}` : idFromCanonical(canon);
+      const ts  = toEpoch(f.publishedISO);
+
       const mention = {
-        id: mid,
+        id,
         canon,
         section: "Meltwater",
         origin: "meltwater",
@@ -261,15 +169,25 @@ export default async function handler(req, res){
         matched: ["meltwater-alert"],
         published_ts: ts,
         published: new Date(ts*1000).toISOString(),
-        provider_meta: { id: f.mwId, permalink: f.mwPermalink, reach: f.reach },
+        provider_meta: { id: f.mwId, permalink: f.mwPermalink },
         provider_raw: it
       };
+
       await redis.zadd(ZSET_MENTIONS, { score: ts, member: JSON.stringify(mention) });
-      stored_news++;
+      stored++;
     }
 
-    return res.status(200).json({ ok:true, stored_news, stored_spikes, stored_sent });
+    // light response with one sample
+    const first = items[0] || {};
+    res.status(200).json({
+      ok:true,
+      stored,
+      sample: {
+        title: first.title || first.headline || null,
+        link: (first.url || first.link || (first.links && (first.links.article || first.links.source || first.links.app))) || null
+      }
+    });
   }catch(e){
-    return res.status(500).json({ ok:false, error: e?.message || String(e) });
+    res.status(500).json({ ok:false, error: e?.message || String(e) });
   }
 }

@@ -88,7 +88,37 @@
     .refresh-news-btn:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(74,103,65,.3)}
     .refresh-news-btn:disabled{opacity:.6;cursor:not-allowed;transform:none}
     .refresh-news-btn.loading{opacity:.8}
-  /* --- Spikes UI --- */
+ /* Base chip style */
+.chip{
+  background:linear-gradient(135deg,rgba(139,195,74,.15),rgba(139,195,74,.25));
+  border:1px solid rgba(139,195,74,.3);
+  border-radius:12px;
+  padding:6px 12px;
+  margin:4px 6px 4px 0;
+  font-size:12px;
+  font-weight:500;
+  display:inline-block;
+  color:#4a6741;
+  transition:.3s;
+}
+
+/* Sentiment variants */
+.chip--pos{
+  background:linear-gradient(135deg,rgba(76,175,80,.15),rgba(76,175,80,.25));
+  border:1px solid rgba(76,175,80,.35);
+  color:#1b5e20;
+}
+.chip--neg{
+  background:linear-gradient(135deg,rgba(244,67,54,.15),rgba(244,67,54,.25));
+  border:1px solid rgba(244,67,54,.35);
+  color:#b71c1c;
+}
+.chip--neu{
+  background:linear-gradient(135deg,rgba(158,158,158,.15),rgba(158,158,158,.25));
+  border:1px solid rgba(158,158,158,.35);
+  color:#424242;
+}
+    /* --- Spikes UI --- */
 .spike-section{background:#fff;margin:20px auto;max-width:1200px;border-radius:16px;box-shadow:0 4px 20px rgba(0,0,0,.08);border:1px solid rgba(255,193,7,.35);padding:20px}
 .spike-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;margin-top:10px}
 .spike-card{background:linear-gradient(135deg,#fff7e6,#fff0c2);border:1px solid #ffc107;border-radius:12px;padding:14px}

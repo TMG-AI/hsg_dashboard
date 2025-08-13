@@ -1,0 +1,44 @@
+<!doctype html>
+<meta charset="utf-8"/>
+<title>Test Google Alerts Ingest</title>
+<style>body{font-family:system-ui,Arial;margin:24px;max-width:720px}</style>
+
+<h2>Test Google Alerts → Dashboard</h2>
+<label>Secret (GA_EMAIL_SECRET): <input id="sec" style="width:420px"></label>
+<div style="margin-top:10px">
+  <label>Title: <input id="title" style="width:600px" value="Right to sue exchanges tested in Coinbase hidden fees case - CoinGeek"></label>
+</div>
+<div style="margin-top:10px">
+  <label>Link: <input id="link" style="width:600px" value="https://coingeek.com/right-to-sue-exchanges-tested-in-coinbase-hidden-fees-case/"></label>
+</div>
+<div style="margin-top:10px">
+  <label>Published (ISO): <input id="pub" style="width:280px" value=""></label>
+  <button id="send">Send</button>
+</div>
+<pre id="out" style="background:#f6f8fa;padding:12px;border-radius:8px;margin-top:16px;white-space:pre-wrap"></pre>
+
+<script>
+document.getElementById('pub').value = new Date().toISOString();
+
+document.getElementById('send').onclick = async ()=>{
+  const payload = {
+    title: document.getElementById('title').value,
+    link: document.getElementById('link').value,
+    published: document.getElementById('pub').value,
+    source: "" // optional
+  };
+  const sec = document.getElementById('sec').value.trim();
+
+  const r = await fetch('/api/ingest_ga_email', {
+    method:'POST',
+    headers: {
+      'Content-Type':'application/json',
+      'x-ga-secret': sec
+    },
+    body: JSON.stringify(payload)
+  });
+  const txt = await r.text();
+  try { document.getElementById('out').textContent = JSON.stringify(JSON.parse(txt), null, 2); }
+  catch { document.getElementById('out').textContent = txt; }
+};
+</script>

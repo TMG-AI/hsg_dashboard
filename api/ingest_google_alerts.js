@@ -9,9 +9,9 @@ const redis = new Redis({
 const ZSET = "mentions:z";
 const SEEN_URL = "mentions:seen:canon";
 
-// 1) PASTE YOUR GOOGLE ALERTS RSS LINKS HERE
+// PASTE YOUR GOOGLE ALERTS RSS LINKS HERE
 const GA_FEEDS = [
-  // "https://www.google.com/alerts/feeds/05287989213493614626/8513419346303824894",
+  "https://www.google.com/alerts/feeds/05287989213493614626/8513419346303824894",
 ];
 
 function normalizeUrl(u){
@@ -31,8 +31,8 @@ function normalizeUrl(u){
 function idFromCanonical(canon){ let h=0; for (let i=0;i<canon.length;i++) h=(h*31+canon.charCodeAt(i))>>>0; return `ga_${h.toString(16)}`; }
 function toEpoch(d){ const t = Date.parse(d||""); return Math.floor((Number.isFinite(t)?t:Date.now())/1000); }
 
-function textBetween(xml, tag){
-  const re = new RegExp(`<${tag}[^>]*>([\\s\\s]*?)<\\/${tag}>`, "i");
+function between(xml, tag){
+  const re = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, "i");
   const m = xml.match(re); if (!m) return "";
   return m[1].replace(/<!\[CDATA\[|\]\]>/g,"").trim();
 }
@@ -41,9 +41,10 @@ function parseItems(xml){
   const items = [];
   const blocks = xml.match(/<item[\s\S]*?<\/item>/gi) || [];
   for (const b of blocks){
-    const title = textBetween(b, "title");
-    const link  = textBetween(b, "link");
-    const pub   = textBetween(b, "pubDate") || textBetween(b, "dc:date") || new Date().toISOString();
+    const title = between(b, "title");
+    const link  = between(b, "link");
+    const pub   = between(b, "pubDate") || between(b, "dc:date") || new Date().toISOString();
+    if (!title && !link) continue;
     items.push({ title, link, pub });
   }
   return items;
@@ -51,22 +52,23 @@ function parseItems(xml){
 
 export default async function handler(req, res){
   try{
-    if (GA_FEEDS.length === 0){
+    if (!GA_FEEDS.length){
       return res.status(200).json({ ok:false, error:"Add your Google Alerts RSS URLs to GA_FEEDS[]" });
     }
 
-    let stored = 0, skipped_existing = 0, scanned = 0;
-
+    let scanned = 0, stored = 0, skipped_existing = 0;
     for (const feed of GA_FEEDS){
       const r = await fetch(feed, { cache: "no-store" });
-      if (!r.ok) continue;
+      if (!r.ok){
+        // 401/403 usually means the feed is private (requires login)
+        continue;
+      }
       const xml = await r.text();
       const items = parseItems(xml);
       scanned += items.length;
 
       for (const it of items){
-        const link = it.link || "";
-        const canon = normalizeUrl(link || it.title);
+        const canon = normalizeUrl(it.link || it.title);
         if (!canon) continue;
 
         const first = await redis.sadd(SEEN_URL, canon);
@@ -75,7 +77,7 @@ export default async function handler(req, res){
         const ts = toEpoch(it.pub);
         const id = idFromCanonical(canon);
         let host = "";
-        try { host = new URL(link).hostname.toLowerCase(); } catch {}
+        try { host = new URL(it.link).hostname.toLowerCase(); } catch {}
 
         const mention = {
           id,
@@ -84,7 +86,7 @@ export default async function handler(req, res){
           origin: "google_alerts",
           provider: "Google Alerts",
           title: it.title || "(untitled)",
-          link: link || null,
+          link: it.link || null,
           source: host || "Google Alert",
           matched: ["google-alert"],
           published_ts: ts,

@@ -1,59 +1,106 @@
-// ============================================
-// FILE 2: /api/summary.js
-// ============================================
-// Direct Meltwater API integration for summary statistics
+// /api/summary.js
+// HYBRID VERSION: Counts from Redis (Google Alerts, RSS) AND Meltwater API
+import { Redis } from "@upstash/redis";
 
-export default async function handler2(req, res) {
+const redis = new Redis({
+  url: process.env.KV_REST_API_URL,
+  token: process.env.KV_REST_API_TOKEN,
+});
+
+const ZSET = "mentions:z";
+
+/* --- time windows (ET "today") --- */
+function rangeTodayET() {
+  const now = new Date();
+  const nowET = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+  const startET = new Date(nowET.getFullYear(), nowET.getMonth(), nowET.getDate(), 0, 0, 0, 0);
+  const delta = nowET.getTime() - now.getTime();
+  const start = Math.floor((startET.getTime() - delta) / 1000);
+  const end = start + 24 * 60 * 60;
+  return [start, end];
+}
+
+function range24h() {
+  const end = Math.floor(Date.now() / 1000);
+  const start = end - 24 * 60 * 60;
+  return [start, end];
+}
+
+/* --- helpers --- */
+function toObj(x) {
+  if (!x) return null;
+  if (typeof x === "object" && x.id) return x;
+  try { return JSON.parse(String(x)); } catch { return null; }
+}
+
+function safeHost(u) { 
+  try { 
+    const url = new URL(u);
+    return url.hostname.toLowerCase().replace(/^www\./, '');
+  } catch { 
+    return ""; 
+  }
+}
+
+/* RSS hosts */
+const RSS_HOSTS = new Set([
+  "coindesk.com",
+  "theblock.co",
+  "cointelegraph.com",
+  "decrypt.co",
+  "blockworks.co",
+  "news.bitcoin.com",
+  "crypto.news",
+  "newsbtc.com",
+  "u.today",
+  "cryptopanic.com",
+  "bitcoinist.com",
+  "99bitcoins.com",
+  "bitcoinnews.com",
+]);
+
+function detectOrigin(m) {
+  if (m && typeof m.origin === "string" && m.origin) return m.origin;
+
+  const prov = (m?.provider || "").toLowerCase();
+  if (
+    prov.includes("meltwater") ||
+    m?.section === "Meltwater" ||
+    (Array.isArray(m?.matched) && m.matched.includes("meltwater-alert"))
+  ) {
+    return "meltwater";
+  }
+
+  const host = safeHost(m?.link || m?.canon || "");
+  if (host && RSS_HOSTS.has(host)) return "rss";
+
+  return "google_alerts";
+}
+
+async function getMeltwaterCount(window) {
+  const MELTWATER_API_KEY = process.env.MELTWATER_API_KEY;
+  const SEARCH_ID = '27558498';
+  
+  if (!MELTWATER_API_KEY) {
+    console.log('Meltwater API key not configured');
+    return 0;
+  }
+
   try {
-    const MELTWATER_API_KEY = process.env.MELTWATER_API_KEY;
-    const SEARCH_ID = '27558498'; // Your Meltwater search ID
-    
-    if (!MELTWATER_API_KEY) {
-      return res.status(500).json({ error: 'Meltwater API key not configured' });
-    }
-
-    // Parse window parameter
-    const win = (req.query?.window || req.query?.w || "24h").toString().toLowerCase();
-    
-    // Calculate time range based on window
     const now = new Date();
     let startDate, endDate;
-    let windowLabel = win;
     
-    switch(win) {
-      case "today":
-        // Start of today ET
-        const todayET = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
-        todayET.setHours(0, 0, 0, 0);
-        startDate = todayET.toISOString().split('.')[0];
-        endDate = now.toISOString().split('.')[0];
-        windowLabel = "today";
-        break;
-      
-      case "7d":
-      case "week":
-        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().split('.')[0];
-        endDate = now.toISOString().split('.')[0];
-        windowLabel = "7d";
-        break;
-      
-      case "30d":
-      case "month":
-        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().split('.')[0];
-        endDate = now.toISOString().split('.')[0];
-        windowLabel = "30d";
-        break;
-      
-      case "24h":
-      default:
-        startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString().split('.')[0];
-        endDate = now.toISOString().split('.')[0];
-        windowLabel = "24h";
-        break;
+    if (window === "today") {
+      const todayET = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+      todayET.setHours(0, 0, 0, 0);
+      startDate = todayET.toISOString().split('.')[0];
+      endDate = now.toISOString().split('.')[0];
+    } else {
+      startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString().split('.')[0];
+      endDate = now.toISOString().split('.')[0];
     }
 
-    // Call Meltwater API
-    const meltwaterResponse = await fetch(`https://api.meltwater.com/v3/search/${SEARCH_ID}`, {
+    const response = await fetch(`https://api.meltwater.com/v3/search/${SEARCH_ID}`, {
       method: 'POST',
       headers: {
         'Accept': 'application/json',
@@ -69,98 +116,70 @@ export default async function handler2(req, res) {
         template: {
           name: "api.json"
         },
-        page_size: 1000 // Get more results for summary
+        page_size: 100
       })
     });
 
-    if (!meltwaterResponse.ok) {
-      console.error('Meltwater API error:', meltwaterResponse.status);
-      return res.status(meltwaterResponse.status).json({ 
-        error: `Meltwater API error: ${meltwaterResponse.status}` 
-      });
+    if (!response.ok) {
+      console.error('Meltwater API error:', response.status);
+      return 0;
     }
 
-    const meltwaterData = await meltwaterResponse.json();
+    const data = await response.json();
     
-    // Process and aggregate data
-    const summary = processDataForSummary(meltwaterData);
+    let articles = [];
+    if (data.results) articles = data.results;
+    else if (data.documents) articles = data.documents;
+    else if (Array.isArray(data)) articles = data;
+    else if (data.data && Array.isArray(data.data)) articles = data.data;
     
-    // Prepare response in the format the dashboard expects
-    const response = {
-      ok: true,
-      window: windowLabel,
-      totals: {
-        all: summary.totals.all,
-        by_origin: summary.totals.by_origin
-      },
-      top_publishers: summary.topPublishers,
-      generated_at: new Date().toISOString()
-    };
-    
-    // Add cache headers for performance
-    res.setHeader('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=120');
-    
-    res.status(200).json(response);
+    return articles.length;
   } catch (error) {
-    console.error('Error fetching summary:', error);
-    res.status(500).json({ 
-      ok: false, 
-      error: 'Internal server error' 
-    });
+    console.error('Error fetching Meltwater count:', error);
+    return 0;
   }
 }
 
-function processDataForSummary(meltwaterData) {
-  // Extract articles from response
-  let articles = [];
-  if (meltwaterData.results) {
-    articles = meltwaterData.results;
-  } else if (meltwaterData.documents) {
-    articles = meltwaterData.documents;
-  } else if (Array.isArray(meltwaterData)) {
-    articles = meltwaterData;
-  } else if (meltwaterData.data && Array.isArray(meltwaterData.data)) {
-    articles = meltwaterData.data;
-  }
-  
-  // Initialize counters
-  const summary = {
-    totals: {
-      all: articles.length,
-      by_origin: {
-        meltwater: articles.length, // All from Meltwater API
-        google_alerts: 0,
-        rss: 0,
-        reddit: 0,
-        x: 0,
-        other: 0
-      }
-    },
-    topPublishers: {}
-  };
-  
-  // Process each article
-  articles.forEach(article => {
-    // Count publishers
-    const source = article.source_name || article.source || article.media_name || 'Unknown';
-    summary.topPublishers[source] = (summary.topPublishers[source] || 0) + 1;
-    
-    // Check for social media sources in URL
-    const url = article.url || article.link || '';
-    if (url.includes('reddit.com')) {
-      summary.totals.by_origin.reddit++;
-      summary.totals.by_origin.meltwater--;
-    } else if (url.includes('twitter.com') || url.includes('x.com')) {
-      summary.totals.by_origin.x++;
-      summary.totals.by_origin.meltwater--;
+export default async function handler(req, res) {
+  try {
+    const win = (req.query?.window || req.query?.w || "today").toString();
+    const [start, end] = win === "24h" ? range24h() : rangeTodayET();
+
+    // Fetch from Redis (Google Alerts, RSS feeds)
+    const raw = await redis.zrange(ZSET, 0, 5000, { rev: true });
+    const items = raw.map(toObj).filter(Boolean);
+
+    // Filter to window and exclude old Meltwater data from Redis
+    const inWin = items.filter((m) => {
+      // Exclude Meltwater items from Redis (we'll get fresh from API)
+      if ((m.origin || "").toLowerCase() === "meltwater") return false;
+      
+      const ts = Number(m?.published_ts ?? NaN);
+      return Number.isFinite(ts) ? ts >= start && ts < end : true;
+    });
+
+    // Count Redis items by origin
+    const by = { meltwater: 0, google_alerts: 0, rss: 0, reddit: 0, x: 0, other: 0 };
+    for (const m of inWin) {
+      const o = detectOrigin(m);
+      if (by.hasOwnProperty(o)) by[o] += 1;
+      else by.other += 1;
     }
-  });
-  
-  // Convert top publishers to sorted array
-  summary.topPublishers = Object.entries(summary.topPublishers)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 10)
-    .map(([name, count]) => ({ name, count }));
-  
-  return summary;
+    
+    // Get fresh Meltwater count from API
+    const meltwaterCount = await getMeltwaterCount(win === "24h" ? "24h" : "today");
+    by.meltwater = meltwaterCount;
+    
+    const total = Object.values(by).reduce((a, b) => a + b, 0);
+
+    res.status(200).json({
+      ok: true,
+      window: win === "24h" ? "24h" : "today",
+      totals: { all: total, by_origin: by },
+      top_publishers: [],
+      generated_at: new Date().toISOString(),
+    });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e?.message || String(e) });
+  }
 }

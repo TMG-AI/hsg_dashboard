@@ -1,5 +1,5 @@
 // /api/get_mentions.js
-// PROPERLY FIXED: Deduplicates and falls back to Redis if API fails
+// FINAL VERSION - Uses correct Meltwater response structure (result.documents)
 import { Redis } from "@upstash/redis";
 
 const redis = new Redis({
@@ -21,20 +21,18 @@ async function getMeltwaterFromAPI() {
   const SEARCH_ID = '27558498';
   
   if (!MELTWATER_API_KEY) {
-    console.log('No Meltwater API key - will use Redis data only');
-    return { success: false, articles: [] };
+    console.log('No Meltwater API key configured');
+    return [];
   }
 
   try {
     const now = new Date();
     const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
     
-    const startDate = yesterday.toISOString().split('.')[0];
-    const endDate = now.toISOString().split('.')[0];
+    const startDate = yesterday.toISOString().replace(/\.\d{3}Z$/, '');
+    const endDate = now.toISOString().replace(/\.\d{3}Z$/, '');
 
-    console.log(`Fetching Meltwater from ${startDate} to ${endDate}`);
-
-    const meltwaterResponse = await fetch(`https://api.meltwater.com/v3/search/${SEARCH_ID}`, {
+    const response = await fetch(`https://api.meltwater.com/v3/search/${SEARCH_ID}`, {
       method: 'POST',
       headers: {
         'Accept': 'application/json',
@@ -49,63 +47,62 @@ async function getMeltwaterFromAPI() {
         sort_order: "desc",
         template: {
           name: "api.json"
-        }
+        },
+        page_size: 200
       })
     });
 
-    if (!meltwaterResponse.ok) {
-      const errorText = await meltwaterResponse.text();
-      console.error('Meltwater API error:', meltwaterResponse.status, errorText);
-      return { success: false, articles: [] };
+    if (!response.ok) {
+      console.error('Meltwater API error:', response.status);
+      return [];
     }
 
-    const meltwaterData = await meltwaterResponse.json();
-    console.log('Meltwater API response received');
+    const meltwaterData = await response.json();
     
-    // Extract articles from various possible response structures
+    // FIXED: Get articles from result.documents (your Meltwater structure)
     let articles = [];
-    if (meltwaterData.results) {
-      articles = meltwaterData.results;
-    } else if (meltwaterData.documents) {
-      articles = meltwaterData.documents;
-    } else if (Array.isArray(meltwaterData)) {
-      articles = meltwaterData;
-    } else if (meltwaterData.data && Array.isArray(meltwaterData.data)) {
-      articles = meltwaterData.data;
+    if (meltwaterData.result && meltwaterData.result.documents) {
+      articles = meltwaterData.result.documents;
+      console.log(`Got ${articles.length} articles from Meltwater API (${meltwaterData.result.document_count} total available)`);
+    } else {
+      console.log('No documents in Meltwater response');
+      return [];
     }
 
-    console.log(`Found ${articles.length} articles from Meltwater API`);
-
-    // Transform to match your data format
-    const transformed = articles.map(article => ({
-      id: `mw_api_${article.id || article.document_id || Date.now()}_${Math.random()}`,
-      title: article.title || article.headline || 'Untitled',
-      link: article.url || article.link || article.permalink || '#',
-      source: article.source_name || article.source || article.media_name || 'Meltwater',
-      section: 'Meltwater',
-      origin: 'meltwater',
-      published: article.published_date || article.date || article.published_at || new Date().toISOString(),
-      published_ts: article.published_timestamp || 
-                    (article.published_date ? Math.floor(Date.parse(article.published_date) / 1000) : Math.floor(Date.now() / 1000)),
-      matched: extractKeywords(article),
-      reach: article.reach || article.circulation || article.audience || 0,
-      sentiment: normalizeSentiment(article),
-      sentiment_label: article.sentiment || article.sentiment_label || null,
-      from_api: true // Mark as from API for deduplication
-    }));
-
-    return { success: true, articles: transformed };
+    // Transform to match your format
+    return articles.map(article => {
+      // Extract data from the nested content structure
+      const content = article.content || {};
+      const metadata = article.metadata || {};
+      const source = article.source || {};
+      
+      return {
+        id: `mw_api_${article.id || metadata.id || Date.now()}_${Math.random()}`,
+        title: content.title || article.title || metadata.headline || 'Untitled',
+        link: article.url || metadata.url || content.link || '#',
+        source: source.name || article.source_name || 'Meltwater',
+        section: 'Meltwater (Live)',
+        origin: 'meltwater',
+        published: article.publish_date || metadata.published_date || new Date().toISOString(),
+        published_ts: article.publish_date ? Math.floor(Date.parse(article.publish_date) / 1000) : Math.floor(Date.now() / 1000),
+        matched: extractKeywords(article),
+        reach: source.reach || metadata.reach || 0,
+        sentiment: normalizeSentiment(metadata),
+        sentiment_label: metadata.sentiment || null,
+        is_from_api: true
+      };
+    });
   } catch (error) {
-    console.error('Error fetching from Meltwater API:', error);
-    return { success: false, articles: [] };
+    console.error('Meltwater API error:', error);
+    return [];
   }
 }
 
-function normalizeSentiment(article) {
-  if (typeof article.sentiment_score === 'number') {
-    return article.sentiment_score;
+function normalizeSentiment(metadata) {
+  if (metadata && typeof metadata.sentiment_score === 'number') {
+    return metadata.sentiment_score;
   }
-  const sentiment = (article.sentiment || '').toLowerCase();
+  const sentiment = (metadata?.sentiment || '').toLowerCase();
   if (sentiment === 'positive') return 1;
   if (sentiment === 'negative') return -1;
   if (sentiment === 'neutral') return 0;
@@ -114,14 +111,28 @@ function normalizeSentiment(article) {
 
 function extractKeywords(article) {
   const keywords = [];
-  if (article.source_type) keywords.push(article.source_type);
-  if (article.sentiment) keywords.push(`sentiment-${article.sentiment.toLowerCase()}`);
-  if (article.country) keywords.push(article.country);
-  if (article.tags && Array.isArray(article.tags)) keywords.push(...article.tags);
+  const content = article.content || {};
+  const metadata = article.metadata || {};
   
-  const title = (article.title || '').toLowerCase();
-  const coinbaseKeywords = ['bitcoin', 'btc', 'ethereum', 'eth', 'crypto', 'cryptocurrency', 'coinbase'];
-  coinbaseKeywords.forEach(keyword => {
+  // Add emojis as keywords if present
+  if (content.emojis && Array.isArray(content.emojis)) {
+    keywords.push(...content.emojis);
+  }
+  
+  // Add hashtags
+  if (content.hashtags && Array.isArray(content.hashtags)) {
+    keywords.push(...content.hashtags);
+  }
+  
+  // Add sentiment
+  if (metadata.sentiment) {
+    keywords.push(`sentiment-${metadata.sentiment.toLowerCase()}`);
+  }
+  
+  // Look for crypto keywords in title
+  const title = (content.title || '').toLowerCase();
+  const cryptoKeywords = ['bitcoin', 'btc', 'ethereum', 'eth', 'crypto', 'cryptocurrency', 'coinbase', 'blockchain'];
+  cryptoKeywords.forEach(keyword => {
     if (title.includes(keyword)) keywords.push(keyword);
   });
   
@@ -136,64 +147,63 @@ export default async function handler(req, res) {
     const section = (url.searchParams.get("section") || "").trim();
     const q = (url.searchParams.get("q") || "").toLowerCase().trim();
 
-    // 1. Get ALL data from Redis (including old Meltwater)
+    // 1. Get fresh Meltwater from API
+    const meltwaterAPIItems = await getMeltwaterFromAPI();
+    
+    // 2. Create Sets for deduplication
+    const apiUrls = new Set(meltwaterAPIItems.map(item => item.link).filter(Boolean));
+    const apiTitles = new Set(meltwaterAPIItems.map(item => item.title.toLowerCase()).filter(Boolean));
+    
+    // 3. Get data from Redis
     let redisItems = [];
     try {
-      const raw = await redis.zrange(ZSET, 0, limit * 2, { rev: true }); // Get more for deduplication
+      const raw = await redis.zrange(ZSET, 0, limit * 2, { rev: true });
       redisItems = raw.map(toObj).filter(Boolean);
       console.log(`Found ${redisItems.length} items in Redis`);
     } catch (redisError) {
       console.error("Redis fetch error:", redisError);
     }
-
-    // 2. Try to get fresh Meltwater from API
-    const { success: apiSuccess, articles: meltwaterAPIItems } = await getMeltwaterFromAPI();
     
-    // 3. Smart deduplication strategy
-    let finalItems = [];
+    // 4. Filter out duplicate Meltwater items from Redis
+    const filteredRedisItems = redisItems.filter(item => {
+      // Keep all non-Meltwater items
+      if (item.origin !== 'meltwater') return true;
+      
+      // For Meltwater items from Redis, exclude if we have fresh version from API
+      if (item.link && apiUrls.has(item.link)) return false;
+      if (item.title && apiTitles.has(item.title.toLowerCase())) return false;
+      
+      // If it's old Meltwater not in API results, exclude it too (it's stale)
+      return false; // Don't keep ANY old Meltwater since we have fresh data
+    });
     
-    if (apiSuccess && meltwaterAPIItems.length > 0) {
-      // API worked - use API for Meltwater, Redis for everything else
-      console.log('Using fresh Meltwater from API');
-      
-      // Filter out Meltwater items from Redis (we have fresh ones from API)
-      const nonMeltwaterRedisItems = redisItems.filter(item => {
-        const itemOrigin = (item.origin || "").toLowerCase();
-        return itemOrigin !== 'meltwater';
-      });
-      
-      // Combine fresh Meltwater with other Redis items
-      finalItems = [...meltwaterAPIItems, ...nonMeltwaterRedisItems];
-    } else {
-      // API failed - use everything from Redis including old Meltwater
-      console.log('Meltwater API unavailable, using all Redis data');
-      finalItems = redisItems;
-    }
-
-    // 4. Apply filters
+    // 5. Combine fresh Meltwater with other sources
+    let allItems = [...meltwaterAPIItems, ...filteredRedisItems];
+    
+    // 6. Apply filters
     if (origin) {
-      finalItems = finalItems.filter(m => (m.origin || "").toLowerCase() === origin);
+      allItems = allItems.filter(m => (m.origin || "").toLowerCase() === origin);
     }
     if (section) {
-      finalItems = finalItems.filter(m => (m.section || "") === section);
+      allItems = allItems.filter(m => (m.section || "") === section);
     }
     if (q) {
-      finalItems = finalItems.filter(m => 
+      allItems = allItems.filter(m => 
         (m.title || "").toLowerCase().includes(q) || 
         (m.source || "").toLowerCase().includes(q) ||
         (m.matched || []).some(tag => tag.toLowerCase().includes(q))
       );
     }
 
-    // 5. Sort by date (newest first)
-    finalItems.sort((a, b) => {
+    // 7. Sort by date (newest first)
+    allItems.sort((a, b) => {
       const tsA = b.published_ts || 0;
       const tsB = a.published_ts || 0;
       return tsA - tsB;
     });
 
-    // 6. Apply limit and clean up response
-    const out = finalItems.slice(0, limit).map(m => ({
+    // 8. Apply limit and return
+    const out = allItems.slice(0, limit).map(m => ({
       id: m.id,
       title: m.title || "(untitled)",
       link: m.link || null,
@@ -208,7 +218,7 @@ export default async function handler(req, res) {
       sentiment_label: m.sentiment_label || null
     }));
 
-    console.log(`Returning ${out.length} total items`);
+    console.log(`Returning ${out.length} items (${meltwaterAPIItems.length} from Meltwater API)`);
     res.status(200).json(out);
   } catch (e) {
     console.error('Handler error:', e);

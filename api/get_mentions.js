@@ -1,5 +1,5 @@
 // /api/get_mentions.js
-// HYBRID VERSION: Pulls from Redis (Google Alerts, RSS) AND Meltwater API
+// PROPERLY FIXED: Deduplicates and falls back to Redis if API fails
 import { Redis } from "@upstash/redis";
 
 const redis = new Redis({
@@ -16,24 +16,24 @@ function toObj(x) {
   catch { return null; }
 }
 
-async function getMeltwaterArticles() {
+async function getMeltwaterFromAPI() {
   const MELTWATER_API_KEY = process.env.MELTWATER_API_KEY;
   const SEARCH_ID = '27558498';
   
   if (!MELTWATER_API_KEY) {
-    console.log('Meltwater API key not configured, skipping Meltwater fetch');
-    return [];
+    console.log('No Meltwater API key - will use Redis data only');
+    return { success: false, articles: [] };
   }
 
   try {
-    // Calculate last 24 hours
     const now = new Date();
     const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
     
     const startDate = yesterday.toISOString().split('.')[0];
     const endDate = now.toISOString().split('.')[0];
 
-    // Call Meltwater API
+    console.log(`Fetching Meltwater from ${startDate} to ${endDate}`);
+
     const meltwaterResponse = await fetch(`https://api.meltwater.com/v3/search/${SEARCH_ID}`, {
       method: 'POST',
       headers: {
@@ -54,13 +54,15 @@ async function getMeltwaterArticles() {
     });
 
     if (!meltwaterResponse.ok) {
-      console.error('Meltwater API error:', meltwaterResponse.status);
-      return [];
+      const errorText = await meltwaterResponse.text();
+      console.error('Meltwater API error:', meltwaterResponse.status, errorText);
+      return { success: false, articles: [] };
     }
 
     const meltwaterData = await meltwaterResponse.json();
+    console.log('Meltwater API response received');
     
-    // Extract articles from response
+    // Extract articles from various possible response structures
     let articles = [];
     if (meltwaterData.results) {
       articles = meltwaterData.results;
@@ -72,8 +74,10 @@ async function getMeltwaterArticles() {
       articles = meltwaterData.data;
     }
 
+    console.log(`Found ${articles.length} articles from Meltwater API`);
+
     // Transform to match your data format
-    return articles.map(article => ({
+    const transformed = articles.map(article => ({
       id: `mw_api_${article.id || article.document_id || Date.now()}_${Math.random()}`,
       title: article.title || article.headline || 'Untitled',
       link: article.url || article.link || article.permalink || '#',
@@ -86,11 +90,14 @@ async function getMeltwaterArticles() {
       matched: extractKeywords(article),
       reach: article.reach || article.circulation || article.audience || 0,
       sentiment: normalizeSentiment(article),
-      sentiment_label: article.sentiment || article.sentiment_label || null
+      sentiment_label: article.sentiment || article.sentiment_label || null,
+      from_api: true // Mark as from API for deduplication
     }));
+
+    return { success: true, articles: transformed };
   } catch (error) {
     console.error('Error fetching from Meltwater API:', error);
-    return [];
+    return { success: false, articles: [] };
   }
 }
 
@@ -129,51 +136,64 @@ export default async function handler(req, res) {
     const section = (url.searchParams.get("section") || "").trim();
     const q = (url.searchParams.get("q") || "").toLowerCase().trim();
 
-    // Get data from Redis (Google Alerts, RSS feeds, etc.)
+    // 1. Get ALL data from Redis (including old Meltwater)
     let redisItems = [];
     try {
-      const raw = await redis.zrange(ZSET, 0, limit - 1, { rev: true });
+      const raw = await redis.zrange(ZSET, 0, limit * 2, { rev: true }); // Get more for deduplication
       redisItems = raw.map(toObj).filter(Boolean);
+      console.log(`Found ${redisItems.length} items in Redis`);
     } catch (redisError) {
       console.error("Redis fetch error:", redisError);
     }
 
-    // Get fresh Meltwater data from API
-    const meltwaterItems = await getMeltwaterArticles();
+    // 2. Try to get fresh Meltwater from API
+    const { success: apiSuccess, articles: meltwaterAPIItems } = await getMeltwaterFromAPI();
     
-    // Filter out old Meltwater items from Redis (to avoid duplicates)
-    redisItems = redisItems.filter(item => {
-      const itemOrigin = (item.origin || "").toLowerCase();
-      return itemOrigin !== 'meltwater';
-    });
+    // 3. Smart deduplication strategy
+    let finalItems = [];
     
-    // Combine all items
-    let items = [...meltwaterItems, ...redisItems];
-    
-    // Apply filters
+    if (apiSuccess && meltwaterAPIItems.length > 0) {
+      // API worked - use API for Meltwater, Redis for everything else
+      console.log('Using fresh Meltwater from API');
+      
+      // Filter out Meltwater items from Redis (we have fresh ones from API)
+      const nonMeltwaterRedisItems = redisItems.filter(item => {
+        const itemOrigin = (item.origin || "").toLowerCase();
+        return itemOrigin !== 'meltwater';
+      });
+      
+      // Combine fresh Meltwater with other Redis items
+      finalItems = [...meltwaterAPIItems, ...nonMeltwaterRedisItems];
+    } else {
+      // API failed - use everything from Redis including old Meltwater
+      console.log('Meltwater API unavailable, using all Redis data');
+      finalItems = redisItems;
+    }
+
+    // 4. Apply filters
     if (origin) {
-      items = items.filter(m => (m.origin || "").toLowerCase() === origin);
+      finalItems = finalItems.filter(m => (m.origin || "").toLowerCase() === origin);
     }
     if (section) {
-      items = items.filter(m => (m.section || "") === section);
+      finalItems = finalItems.filter(m => (m.section || "") === section);
     }
     if (q) {
-      items = items.filter(m => 
+      finalItems = finalItems.filter(m => 
         (m.title || "").toLowerCase().includes(q) || 
         (m.source || "").toLowerCase().includes(q) ||
         (m.matched || []).some(tag => tag.toLowerCase().includes(q))
       );
     }
 
-    // Sort by date (newest first)
-    items.sort((a, b) => {
+    // 5. Sort by date (newest first)
+    finalItems.sort((a, b) => {
       const tsA = b.published_ts || 0;
       const tsB = a.published_ts || 0;
       return tsA - tsB;
     });
 
-    // Apply limit
-    const out = items.slice(0, limit).map(m => ({
+    // 6. Apply limit and clean up response
+    const out = finalItems.slice(0, limit).map(m => ({
       id: m.id,
       title: m.title || "(untitled)",
       link: m.link || null,
@@ -188,8 +208,10 @@ export default async function handler(req, res) {
       sentiment_label: m.sentiment_label || null
     }));
 
+    console.log(`Returning ${out.length} total items`);
     res.status(200).json(out);
   } catch (e) {
+    console.error('Handler error:', e);
     res.status(500).json({ ok: false, error: e?.message || String(e) });
   }
 }

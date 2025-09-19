@@ -1,11 +1,10 @@
 // /api/test_meltwater.js
-// Test endpoint to debug Meltwater API
+// FIXED VERSION - Uses correct dates (looking back, not forward)
 
 export default async function handler(req, res) {
   const MELTWATER_API_KEY = process.env.MELTWATER_API_KEY;
   const SEARCH_ID = '27558498';
   
-  // Check if API key exists
   if (!MELTWATER_API_KEY) {
     return res.status(200).json({
       error: 'MELTWATER_API_KEY not found in environment variables',
@@ -14,14 +13,15 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Try to call Meltwater API
+    // FIXED: Search LAST 24 hours, not future dates
     const now = new Date();
     const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
     
-    const startDate = yesterday.toISOString().split('.')[0];
-    const endDate = now.toISOString().split('.')[0];
+    // Format properly for Meltwater
+    const startDate = yesterday.toISOString().replace(/\.\d{3}Z$/, '');
+    const endDate = now.toISOString().replace(/\.\d{3}Z$/, '');
 
-    console.log('Calling Meltwater API...');
+    console.log(`Searching from ${startDate} to ${endDate}`);
     
     const response = await fetch(`https://api.meltwater.com/v3/search/${SEARCH_ID}`, {
       method: 'POST',
@@ -39,7 +39,7 @@ export default async function handler(req, res) {
         template: {
           name: "api.json"
         },
-        page_size: 10
+        page_size: 100
       })
     });
 
@@ -50,19 +50,53 @@ export default async function handler(req, res) {
         status: response.status,
         message: errorText,
         hasKey: true,
-        keyLength: MELTWATER_API_KEY.length,
-        searchId: SEARCH_ID
+        searchId: SEARCH_ID,
+        dates: { start: startDate, end: endDate }
       });
     }
 
     const data = await response.json();
     
-    // Extract article count
+    // Try different ways to find articles in response
+    let articles = [];
     let articleCount = 0;
-    if (data.results) articleCount = data.results.length;
-    else if (data.documents) articleCount = data.documents.length;
-    else if (Array.isArray(data)) articleCount = data.length;
-    else if (data.data && Array.isArray(data.data)) articleCount = data.data.length;
+    
+    // Check all possible response structures
+    if (data.results && Array.isArray(data.results)) {
+      articles = data.results;
+      articleCount = articles.length;
+    } else if (data.documents && Array.isArray(data.documents)) {
+      articles = data.documents;
+      articleCount = articles.length;
+    } else if (data.data && Array.isArray(data.data)) {
+      articles = data.data;
+      articleCount = articles.length;
+    } else if (Array.isArray(data)) {
+      articles = data;
+      articleCount = articles.length;
+    }
+    
+    // If still no articles, check for nested structures
+    if (articleCount === 0 && data.response) {
+      if (data.response.results) {
+        articles = data.response.results;
+        articleCount = articles.length;
+      } else if (data.response.documents) {
+        articles = data.response.documents;
+        articleCount = articles.length;
+      }
+    }
+    
+    // Show first article as sample if we have any
+    let sampleArticle = null;
+    if (articles.length > 0) {
+      const first = articles[0];
+      sampleArticle = {
+        title: first.title || first.headline || 'No title',
+        date: first.published_date || first.date || first.published_at || 'No date',
+        source: first.source_name || first.source || 'No source'
+      };
+    }
     
     return res.status(200).json({
       success: true,
@@ -70,21 +104,28 @@ export default async function handler(req, res) {
       keyLength: MELTWATER_API_KEY.length,
       searchId: SEARCH_ID,
       articleCount: articleCount,
-      timeRange: { start: startDate, end: endDate },
+      timeRange: { 
+        start: startDate, 
+        end: endDate,
+        note: 'Searching last 24 hours'
+      },
       responseStructure: {
         hasResults: !!data.results,
         hasDocuments: !!data.documents,
         isArray: Array.isArray(data),
-        hasData: !!data.data
-      }
+        hasData: !!data.data,
+        hasResponse: !!data.response,
+        allKeys: Object.keys(data).slice(0, 10) // Show first 10 keys
+      },
+      sampleArticle: sampleArticle,
+      rawDataSample: JSON.stringify(data).substring(0, 500) // First 500 chars of response
     });
     
   } catch (error) {
     return res.status(200).json({
       error: 'Exception occurred',
       message: error.message,
-      hasKey: true,
-      keyLength: MELTWATER_API_KEY.length
+      hasKey: true
     });
   }
 }

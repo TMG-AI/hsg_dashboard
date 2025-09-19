@@ -1,117 +1,37 @@
-// ============================================
-// FILE 3: /api/sentiment_overview.js
-// ============================================
-// Direct Meltwater API integration for sentiment analysis
+// /api/sentiment_overview.js
+import { Redis } from "@upstash/redis";
+const redis = new Redis({ url: process.env.KV_REST_API_URL, token: process.env.KV_REST_API_TOKEN });
 
-export default async function handler3(req, res) {
-  try {
-    const MELTWATER_API_KEY = process.env.MELTWATER_API_KEY;
-    const SEARCH_ID = '27558498'; // Your Meltwater search ID
-    
-    if (!MELTWATER_API_KEY) {
-      return res.status(500).json({ error: 'Meltwater API key not configured' });
-    }
+const ZSET_SENT = "mw:sentiment:z";
 
-    // Parse window parameter
-    const win = (req.query?.window || "24h").toString().toLowerCase();
-    const hours = parseInt(req.query?.hours || "24", 10);
-    
-    // Calculate time range
-    const now = new Date();
-    let startDate, endDate;
-    let windowLabel = win;
-    
-    if (win === "today") {
-      // Start of today ET
-      const todayET = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
-      todayET.setHours(0, 0, 0, 0);
-      startDate = todayET.toISOString().split('.')[0];
-      endDate = now.toISOString().split('.')[0];
-      windowLabel = "today";
-    } else {
-      // Default to hours-based window
-      startDate = new Date(now.getTime() - hours * 60 * 60 * 1000).toISOString().split('.')[0];
-      endDate = now.toISOString().split('.')[0];
-      windowLabel = `${hours}h`;
-    }
+function startOfTodayET(){
+  const now = new Date();
+  const p = new Intl.DateTimeFormat("en-US",{ timeZone:"America/New_York", year:"numeric",month:"2-digit",day:"2-digit" })
+    .formatToParts(now).reduce((o,p)=>{ if(p.type!=="literal") o[p.type]=p.value; return o; },{});
+  const iso = `${p.year}-${p.month}-${p.day}T00:00:00-04:00`;
+  return Math.floor(new Date(iso).getTime()/1000);
+}
 
-    // Call Meltwater API
-    const meltwaterResponse = await fetch(`https://api.meltwater.com/v3/search/${SEARCH_ID}`, {
-      method: 'POST',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        'apikey': MELTWATER_API_KEY
-      },
-      body: JSON.stringify({
-        start: startDate,
-        end: endDate,
-        tz: "America/New_York",
-        sort_by: "date",
-        sort_order: "desc",
-        template: {
-          name: "api.json"
-        },
-        page_size: 100
-      })
-    });
+export default async function handler(req,res){
+  try{
+    const win = (req.query?.window || "today").toString();
+    const hours = Number(req.query?.hours || 24);
+    let start = 0;
+    if (win === "today") start = startOfTodayET();
+    else if (win === "24h" || Number.isFinite(hours)) start = Math.floor(Date.now()/1000) - hours*3600;
 
-    if (!meltwaterResponse.ok) {
-      console.error('Meltwater API error:', meltwaterResponse.status);
-      return res.status(meltwaterResponse.status).json({ 
-        error: `Meltwater API error: ${meltwaterResponse.status}` 
-      });
+    const raw = await redis.zrange(ZSET_SENT, 0, -1);
+    const items = [];
+    for (const s of raw){
+      try{
+        const o = JSON.parse(s);
+        if (!start || (o.ts||0) >= start) items.push(o);
+      }catch{}
     }
-
-    const meltwaterData = await meltwaterResponse.json();
-    
-    // Extract articles
-    let articles = [];
-    if (meltwaterData.results) {
-      articles = meltwaterData.results;
-    } else if (meltwaterData.documents) {
-      articles = meltwaterData.documents;
-    } else if (Array.isArray(meltwaterData)) {
-      articles = meltwaterData;
-    } else if (meltwaterData.data && Array.isArray(meltwaterData.data)) {
-      articles = meltwaterData.data;
-    }
-    
-    // Find the latest article with sentiment
-    let latest = null;
-    for (const article of articles) {
-      if (article.sentiment || article.sentiment_score !== undefined) {
-        latest = {
-          ts: Math.floor(Date.parse(article.published_date || article.published_at || new Date()) / 1000),
-          title: article.title || article.headline,
-          source: article.source_name || article.source,
-          sentiment: {
-            label: article.sentiment || 'neutral',
-            score: article.sentiment_score || 0
-          }
-        };
-        break;
-      }
-    }
-    
-    // Prepare response
-    const response = {
-      ok: true,
-      window: windowLabel,
-      latest: latest,
-      items: [], // Empty for now since dashboard doesn't use it
-      generated_at: new Date().toISOString()
-    };
-    
-    // Add cache headers
-    res.setHeader('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=120');
-    
-    res.status(200).json(response);
-  } catch (error) {
-    console.error('Error fetching sentiment:', error);
-    res.status(500).json({ 
-      ok: false, 
-      error: 'Internal server error' 
-    });
+    items.sort((a,b)=> (b.ts||0) - (a.ts||0));
+    const latest = items[0] || null;
+    res.status(200).json({ ok:true, window: win, latest, items: items.slice(0,10) });
+  }catch(e){
+    res.status(500).json({ ok:false, error: e?.message || String(e) });
   }
 }

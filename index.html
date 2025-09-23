@@ -463,6 +463,259 @@
     }
   }catch(e){ console.warn('sentiment load error', e); }
 })();
+    <!-- Add this to your index.html before the closing </body> tag -->
+<script>
+// Real-time streaming updates
+(function() {
+  let eventSource = null;
+  let reconnectTimeout = null;
+  let reconnectAttempts = 0;
+  
+  function connectToStream() {
+    console.log('Connecting to real-time stream...');
+    
+    eventSource = new EventSource('/api/stream');
+    
+    eventSource.onopen = function() {
+      console.log('Stream connected');
+      reconnectAttempts = 0;
+      
+      // Show live indicator
+      const indicator = document.createElement('div');
+      indicator.id = 'live-indicator';
+      indicator.innerHTML = '🟢 LIVE';
+      indicator.style.cssText = 'position:fixed;top:20px;right:20px;background:#4caf50;color:white;padding:8px 16px;border-radius:20px;font-size:12px;font-weight:600;z-index:1000';
+      document.body.appendChild(indicator);
+    };
+    
+    eventSource.onmessage = function(event) {
+      try {
+        const data = JSON.parse(event.data);
+        handleStreamUpdate(data);
+      } catch (error) {
+        console.error('Error parsing stream data:', error);
+      }
+    };
+    
+    eventSource.onerror = function(error) {
+      console.error('Stream error:', error);
+      eventSource.close();
+      
+      // Update indicator
+      const indicator = document.getElementById('live-indicator');
+      if (indicator) {
+        indicator.innerHTML = '🔴 RECONNECTING...';
+        indicator.style.background = '#f44336';
+      }
+      
+      // Exponential backoff for reconnection
+      reconnectAttempts++;
+      const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
+      
+      clearTimeout(reconnectTimeout);
+      reconnectTimeout = setTimeout(() => {
+        connectToStream();
+      }, delay);
+    };
+  }
+  
+  function handleStreamUpdate(data) {
+    console.log('Stream update:', data);
+    
+    if (data.type === 'new_mentions') {
+      // New mentions received
+      showNewMentionsNotification(data);
+      
+      // Add mentions to the top of the list
+      if (data.mentions && data.mentions.length > 0) {
+        addNewMentionsToList(data.mentions);
+      }
+      
+      // Refresh counts
+      updateMeltwaterCount();
+    } else if (data.type === 'count_update') {
+      // Update Meltwater count directly
+      const meltwaterEl = document.getElementById('sb-mw');
+      if (meltwaterEl && data.meltwater_count !== undefined) {
+        animateCountUpdate(meltwaterEl, data.meltwater_count);
+      }
+    }
+  }
+  
+  function showNewMentionsNotification(data) {
+    // Create notification banner
+    const notification = document.createElement('div');
+    notification.className = 'stream-notification';
+    notification.innerHTML = `
+      <div style="background:linear-gradient(135deg,#4caf50,#8bc34a);color:white;padding:12px 20px;border-radius:8px;margin:16px auto;max-width:1200px;display:flex;align-items:center;justify-content:space-between;animation:slideDown 0.5s ease">
+        <span>📰 ${data.count} new mention${data.count > 1 ? 's' : ''} received!</span>
+        <button onclick="this.parentElement.parentElement.remove()" style="background:none;border:none;color:white;cursor:pointer;font-size:20px">×</button>
+      </div>
+    `;
+    
+    // Insert at top of main content
+    const wrap = document.querySelector('.wrap');
+    if (wrap) {
+      wrap.insertBefore(notification, wrap.firstChild);
+      
+      // Auto-remove after 5 seconds
+      setTimeout(() => {
+        notification.style.opacity = '0';
+        setTimeout(() => notification.remove(), 300);
+      }, 5000);
+    }
+  }
+  
+  function addNewMentionsToList(mentions) {
+    const list = document.getElementById('list');
+    if (!list) return;
+    
+    mentions.forEach((mention, index) => {
+      // Check if mention already exists
+      const existing = list.querySelector(`[data-mention-id="${mention.id}"]`);
+      if (existing) return;
+      
+      // Create new card
+      const div = document.createElement('div');
+      div.className = 'card new-mention';
+      div.setAttribute('data-mention-id', mention.id);
+      div.style.cssText = 'animation:slideInNew 0.5s ease forwards;border:2px solid #4caf50';
+      
+      const chips = (mention.matched || []).map(k => `<span class="chip">${k}</span>`).join('');
+      
+      div.innerHTML = `
+        <div class="card-content">
+          <span style="position:absolute;top:10px;right:10px;background:#4caf50;color:white;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600">NEW</span>
+          <h3 class="card-title"><a href="${mention.link}" target="_blank" rel="noopener">${mention.title}</a></h3>
+          <div class="meta">
+            <div>${mention.source} · Just now</div>
+          </div>
+          ${chips ? `<div class="chip-container">${chips}</div>` : ''}
+        </div>
+      `;
+      
+      // Insert at the top of the list
+      list.insertBefore(div, list.firstChild);
+      
+      // Remove "NEW" badge after 30 seconds
+      setTimeout(() => {
+        const badge = div.querySelector('span');
+        if (badge) badge.style.display = 'none';
+        div.style.border = '1px solid rgba(139,195,74,.2)';
+      }, 30000);
+    });
+  }
+  
+  function animateCountUpdate(element, newValue) {
+    const oldValue = parseInt(element.textContent) || 0;
+    if (oldValue === newValue) return;
+    
+    // Highlight the element
+    element.style.transition = 'all 0.3s';
+    element.style.transform = 'scale(1.2)';
+    element.style.color = '#4caf50';
+    
+    // Animate the number
+    const duration = 1000;
+    const start = Date.now();
+    const diff = newValue - oldValue;
+    
+    function updateNumber() {
+      const elapsed = Date.now() - start;
+      const progress = Math.min(elapsed / duration, 1);
+      const current = Math.floor(oldValue + diff * progress);
+      
+      element.textContent = current.toLocaleString();
+      
+      if (progress < 1) {
+        requestAnimationFrame(updateNumber);
+      } else {
+        // Reset styling
+        setTimeout(() => {
+          element.style.transform = 'scale(1)';
+          element.style.color = '#4a6741';
+        }, 300);
+      }
+    }
+    
+    updateNumber();
+  }
+  
+  async function updateMeltwaterCount() {
+    try {
+      const res = await fetch('/api/summary?window=today', { cache: 'no-store' });
+      const data = await res.json();
+      if (data?.ok && data.totals?.by_origin?.meltwater !== undefined) {
+        const meltwaterEl = document.getElementById('sb-mw');
+        if (meltwaterEl) {
+          animateCountUpdate(meltwaterEl, data.totals.by_origin.meltwater);
+        }
+        
+        // Update total
+        const totalEl = document.getElementById('sb-total');
+        if (totalEl && data.totals?.all !== undefined) {
+          animateCountUpdate(totalEl, data.totals.all);
+        }
+      }
+    } catch (error) {
+      console.error('Error updating counts:', error);
+    }
+  }
+  
+  // Add CSS for animations
+  const style = document.createElement('style');
+  style.textContent = `
+    @keyframes slideDown {
+      from {
+        transform: translateY(-100%);
+        opacity: 0;
+      }
+      to {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    }
+    
+    @keyframes slideInNew {
+      from {
+        transform: translateX(-20px);
+        opacity: 0;
+      }
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+    
+    .stream-notification {
+      position: fixed;
+      top: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 999;
+      transition: opacity 0.3s;
+    }
+    
+    .new-mention {
+      position: relative;
+    }
+  `;
+  document.head.appendChild(style);
+  
+  // Connect when page loads
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', connectToStream);
+  } else {
+    connectToStream();
+  }
+  
+  // Cleanup on page unload
+  window.addEventListener('beforeunload', () => {
+    if (eventSource) {
+      eventSource.close();
+    }
+  });
+})();
 </script>
 </body>
 </html>

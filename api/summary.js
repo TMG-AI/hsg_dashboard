@@ -1,4 +1,5 @@
-// /api/summary.js - FIXED with proper fallback
+// /api/summary.js
+// FIXED: Combines historical API count + new streaming webhooks
 import { Redis } from "@upstash/redis";
 
 const redis = new Redis({
@@ -85,7 +86,7 @@ function detectOrigin(m) {
   return "google_alerts";
 }
 
-// Get count of streamed Meltwater mentions for today
+// Get count of NEW streamed Meltwater mentions
 async function getStreamedMeltwaterCount(window) {
   try {
     if (window === "today") {
@@ -115,7 +116,7 @@ async function getStreamedMeltwaterCount(window) {
   }
 }
 
-// Original API method (RESTORED)
+// Get HISTORICAL count from Meltwater API
 async function getMeltwaterCountFromAPI(window) {
   const MELTWATER_API_KEY = process.env.MELTWATER_API_KEY;
   const SEARCH_ID = '27558498';
@@ -161,6 +162,12 @@ async function getMeltwaterCountFromAPI(window) {
       })
     });
 
+    // Handle rate limiting
+    if (response.status === 429) {
+      console.log('Meltwater API rate limited');
+      return { success: false, count: 0, rateLimited: true };
+    }
+
     if (!response.ok) {
       const errorText = await response.text();
       console.error('Meltwater API error:', response.status, errorText);
@@ -203,7 +210,7 @@ export default async function handler(req, res) {
     const by = { meltwater: 0, google_alerts: 0, rss: 0, reddit: 0, x: 0, other: 0 };
     let meltwaterCountFromRedis = 0;
 
-    // Count non-Meltwater items from Redis
+    // Count items from Redis by origin (except Meltwater - we'll calculate that separately)
     for (const m of inWin) {
       const o = detectOrigin(m);
       if (o === "meltwater") {
@@ -215,31 +222,32 @@ export default async function handler(req, res) {
       }
     }
 
-    console.log(`Meltwater items in Redis: ${meltwaterCountFromRedis}`);
+    console.log(`Meltwater items in Redis cache: ${meltwaterCountFromRedis}`);
 
-    // Try multiple sources for Meltwater count:
-    // 1. Check for streamed data first
+    // Get BOTH streaming count AND API count for Meltwater
     const streamedCount = await getStreamedMeltwaterCount(win);
-    
-    if (streamedCount > 0) {
-      // We have webhook data - use it
-      console.log('Using streamed Meltwater count:', streamedCount);
-      by.meltwater = streamedCount;
+    const { success: apiSuccess, count: apiCount, rateLimited } = await getMeltwaterCountFromAPI(win);
+
+    // Calculate total Meltwater count (combining historical + new)
+    if (apiSuccess && apiCount > 0) {
+      // API worked - use API count as baseline + any new streamed
+      by.meltwater = apiCount + streamedCount;
+      console.log(`Meltwater total: ${apiCount} (API) + ${streamedCount} (streamed) = ${by.meltwater}`);
+    } else if (rateLimited) {
+      // API is rate limited - use Redis cache as baseline + streamed
+      by.meltwater = meltwaterCountFromRedis + streamedCount;
+      console.log(`Meltwater total (rate limited): ${meltwaterCountFromRedis} (Redis) + ${streamedCount} (streamed) = ${by.meltwater}`);
+    } else if (streamedCount > 0) {
+      // API failed but we have streaming - use Redis as baseline
+      by.meltwater = meltwaterCountFromRedis + streamedCount;
+      console.log(`Meltwater total: ${meltwaterCountFromRedis} (Redis) + ${streamedCount} (streamed) = ${by.meltwater}`);
     } else {
-      // No webhook data yet - fall back to API
-      console.log('No streamed data, trying API');
-      const { success: apiSuccess, count: meltwaterAPICount } = await getMeltwaterCountFromAPI(win);
-      
-      if (apiSuccess && meltwaterAPICount > 0) {
-        console.log('Using Meltwater API count:', meltwaterAPICount);
-        by.meltwater = meltwaterAPICount;
-      } else {
-        // API also failed/empty - use Redis count
-        console.log('Using Meltwater count from Redis:', meltwaterCountFromRedis);
-        by.meltwater = meltwaterCountFromRedis;
-      }
+      // No streaming, API failed - just use Redis cache
+      by.meltwater = meltwaterCountFromRedis;
+      console.log(`Meltwater total: ${meltwaterCountFromRedis} (Redis cache only)`);
     }
 
+    // Calculate grand total
     const total = Object.values(by).reduce((a, b) => a + b, 0);
 
     // Include streaming status in response
@@ -247,7 +255,10 @@ export default async function handler(req, res) {
       streaming_active: streamedCount > 0,
       last_streamed: await redis.get('meltwater:last_stream_time') || null,
       total_streamed_today: streamedCount,
-      data_source: streamedCount > 0 ? 'webhook' : (by.meltwater > 0 ? 'api' : 'redis')
+      api_count: apiSuccess ? apiCount : null,
+      cache_count: meltwaterCountFromRedis,
+      data_source: apiSuccess ? 'api+streaming' : (rateLimited ? 'cache+streaming' : 'cache'),
+      rate_limited: rateLimited || false
     };
 
     res.status(200).json({

@@ -1,4 +1,4 @@
-// /api/summary.js - Updated to use streamed counts
+// /api/summary.js - FIXED with proper fallback
 import { Redis } from "@upstash/redis";
 
 const redis = new Redis({
@@ -115,12 +115,80 @@ async function getStreamedMeltwaterCount(window) {
   }
 }
 
+// Original API method (RESTORED)
+async function getMeltwaterCountFromAPI(window) {
+  const MELTWATER_API_KEY = process.env.MELTWATER_API_KEY;
+  const SEARCH_ID = '27558498';
+  
+  if (!MELTWATER_API_KEY) {
+    console.log('No Meltwater API key - will count from Redis');
+    return { success: false, count: 0 };
+  }
+
+  try {
+    const now = new Date();
+    let startDate, endDate;
+    
+    if (window === "today") {
+      const todayET = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+      todayET.setHours(0, 0, 0, 0);
+      startDate = todayET.toISOString().split('.')[0];
+      endDate = now.toISOString().split('.')[0];
+    } else {
+      startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString().split('.')[0];
+      endDate = now.toISOString().split('.')[0];
+    }
+
+    console.log(`Getting Meltwater count from API: ${startDate} to ${endDate}`);
+
+    const response = await fetch(`https://api.meltwater.com/v3/search/${SEARCH_ID}`, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'apikey': MELTWATER_API_KEY
+      },
+      body: JSON.stringify({
+        start: startDate,
+        end: endDate,
+        tz: "America/New_York",
+        sort_by: "date",
+        sort_order: "desc",
+        template: {
+          name: "api.json"
+        },
+        page_size: 100
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Meltwater API error:', response.status, errorText);
+      return { success: false, count: 0 };
+    }
+
+    const data = await response.json();
+    
+    let articles = [];
+    if (data.results) articles = data.results;
+    else if (data.documents) articles = data.documents;
+    else if (Array.isArray(data)) articles = data;
+    else if (data.data && Array.isArray(data.data)) articles = data.data;
+    
+    console.log(`Meltwater API returned ${articles.length} articles`);
+    return { success: true, count: articles.length };
+  } catch (error) {
+    console.error('Error fetching Meltwater count:', error);
+    return { success: false, count: 0 };
+  }
+}
+
 export default async function handler(req, res) {
   try {
     const win = (req.query?.window || req.query?.w || "today").toString();
     const [start, end] = win === "24h" ? range24h() : rangeTodayET();
 
-    // Fetch ALL from Redis (main set)
+    // Fetch ALL from Redis
     const raw = await redis.zrange(ZSET, 0, 5000, { rev: true });
     const items = raw.map(toObj).filter(Boolean);
     console.log(`Total items in Redis: ${items.length}`);
@@ -133,13 +201,13 @@ export default async function handler(req, res) {
 
     // Initialize counts
     const by = { meltwater: 0, google_alerts: 0, rss: 0, reddit: 0, x: 0, other: 0 };
+    let meltwaterCountFromRedis = 0;
 
     // Count non-Meltwater items from Redis
     for (const m of inWin) {
       const o = detectOrigin(m);
       if (o === "meltwater") {
-        // Skip - we'll use the streamed count
-        continue;
+        meltwaterCountFromRedis++;
       } else if (by.hasOwnProperty(o)) {
         by[o] += 1;
       } else {
@@ -147,19 +215,39 @@ export default async function handler(req, res) {
       }
     }
 
-    // Get Meltwater count from streaming data
-    const streamedCount = await getStreamedMeltwaterCount(win);
-    by.meltwater = streamedCount;
+    console.log(`Meltwater items in Redis: ${meltwaterCountFromRedis}`);
 
-    console.log(`Final counts: MW=${by.meltwater} (streamed), GA=${by.google_alerts}, RSS=${by.rss}`);
+    // Try multiple sources for Meltwater count:
+    // 1. Check for streamed data first
+    const streamedCount = await getStreamedMeltwaterCount(win);
+    
+    if (streamedCount > 0) {
+      // We have webhook data - use it
+      console.log('Using streamed Meltwater count:', streamedCount);
+      by.meltwater = streamedCount;
+    } else {
+      // No webhook data yet - fall back to API
+      console.log('No streamed data, trying API');
+      const { success: apiSuccess, count: meltwaterAPICount } = await getMeltwaterCountFromAPI(win);
+      
+      if (apiSuccess && meltwaterAPICount > 0) {
+        console.log('Using Meltwater API count:', meltwaterAPICount);
+        by.meltwater = meltwaterAPICount;
+      } else {
+        // API also failed/empty - use Redis count
+        console.log('Using Meltwater count from Redis:', meltwaterCountFromRedis);
+        by.meltwater = meltwaterCountFromRedis;
+      }
+    }
 
     const total = Object.values(by).reduce((a, b) => a + b, 0);
 
-    // Get real-time stats if available
+    // Include streaming status in response
     const realtimeStats = {
       streaming_active: streamedCount > 0,
       last_streamed: await redis.get('meltwater:last_stream_time') || null,
-      total_streamed_today: streamedCount
+      total_streamed_today: streamedCount,
+      data_source: streamedCount > 0 ? 'webhook' : (by.meltwater > 0 ? 'api' : 'redis')
     };
 
     res.status(200).json({

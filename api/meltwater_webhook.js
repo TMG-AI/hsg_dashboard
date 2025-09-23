@@ -1,5 +1,5 @@
 // /api/meltwater_webhook.js
-// This endpoint receives real-time updates from Meltwater webhooks
+// Receives real-time mentions from Meltwater Streaming API
 import { Redis } from "@upstash/redis";
 
 const redis = new Redis({
@@ -8,145 +8,33 @@ const redis = new Redis({
 });
 
 const ZSET = "mentions:z";
-const ZSET_SENT = "mw:sentiment:z";
-const ZSET_SPIKES = "mw:spikes:z";
+const STREAM_ZSET = "mentions:streamed:z"; // Separate set for streamed mentions
+const COUNTER_KEY = "meltwater:stream:count";
+const DAILY_COUNTER_KEY = "meltwater:stream:daily";
 
-// Verify webhook signature if configured
-function verifyWebhookSignature(req, signature) {
-  // If you have a webhook secret from Meltwater
-  const secret = process.env.MELTWATER_WEBHOOK_SECRET;
-  if (!secret) return true; // Skip verification if no secret configured
-  
-  // Implement signature verification based on Meltwater's method
-  // This is a placeholder - check Meltwater docs for exact implementation
-  return true;
+// Helper to get today's date key for daily counters
+function getTodayKey() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${DAILY_COUNTER_KEY}:${year}-${month}-${day}`;
 }
 
-// Transform Meltwater document to your mention format
-function transformMeltwaterDocument(doc) {
-  const now = Date.now();
+// Verify webhook signature (optional but recommended)
+function verifyWebhookSignature(req, secret) {
+  // Meltwater may send a signature header for verification
+  // Implement based on their documentation
+  const signature = req.headers['x-meltwater-signature'];
+  if (!signature || !secret) return true; // Skip if not configured
   
-  // Extract all relevant fields from Meltwater
-  const mention = {
-    id: `mw_${doc.id || doc.document_id || now}_${Math.random()}`,
-    title: doc.title || doc.headline || "(untitled)",
-    link: doc.url || doc.link || doc.permalink || null,
-    source: doc.source_name || doc.source || doc.media_name || "Meltwater",
-    section: "Meltwater",
-    origin: "meltwater",
-    
-    // Keywords/tags
-    matched: [
-      "meltwater-alert",
-      ...(doc.tags || []),
-      ...(doc.keywords || []),
-      ...(doc.entities || [])
-    ].filter(Boolean).slice(0, 50),
-    
-    // Timestamps
-    published: doc.published_date || doc.date || doc.published_at || new Date().toISOString(),
-    published_ts: doc.published_timestamp || 
-                  (doc.published_date ? Math.floor(Date.parse(doc.published_date) / 1000) : Math.floor(now / 1000)),
-    
-    // Metrics
-    reach: doc.reach || doc.circulation || doc.audience || 0,
-    sentiment: doc.sentiment_score !== undefined ? doc.sentiment_score : 
-               doc.sentiment === "positive" ? 1 : 
-               doc.sentiment === "negative" ? -1 : 
-               doc.sentiment === "neutral" ? 0 : undefined,
-    sentiment_label: doc.sentiment || doc.sentiment_label || null,
-    
-    // Additional metadata
-    country: doc.country || doc.country_code || null,
-    language: doc.language || doc.language_code || null,
-    
-    // Store original provider metadata
-    provider_meta: {
-      document_id: doc.id || doc.document_id,
-      search_id: doc.search_id,
-      reach: doc.reach,
-      sentiment: doc.sentiment_score,
-      sentiment_label: doc.sentiment,
-      influencer_score: doc.influencer_score,
-      source_type: doc.source_type || doc.media_type
-    }
-  };
+  // Implement HMAC verification if Meltwater provides it
+  // const expectedSignature = crypto.createHmac('sha256', secret)
+  //   .update(JSON.stringify(req.body))
+  //   .digest('hex');
+  // return signature === expectedSignature;
   
-  return mention;
-}
-
-// Detect spikes in mention volume
-async function detectSpike(searchId, count) {
-  try {
-    // Get recent counts for this search
-    const recentKey = `mw:counts:${searchId}`;
-    const recent = await redis.lrange(recentKey, 0, 10);
-    
-    if (recent.length >= 5) {
-      const counts = recent.map(r => parseInt(r) || 0);
-      const avg = counts.reduce((a, b) => a + b, 0) / counts.length;
-      const stdDev = Math.sqrt(counts.reduce((sum, c) => sum + Math.pow(c - avg, 2), 0) / counts.length);
-      
-      // Detect if current count is 2+ standard deviations above average
-      if (count > avg + (2 * stdDev) && stdDev > 0) {
-        const spike = {
-          ts: Math.floor(Date.now() / 1000),
-          type: 'volume',
-          severity: count > avg + (3 * stdDev) ? 'high' : 'medium',
-          source: 'meltwater',
-          metric: 'mention_count',
-          value: count,
-          baseline: avg,
-          deviation: (count - avg) / stdDev,
-          message: `Spike detected: ${count} mentions (${((count - avg) / avg * 100).toFixed(0)}% above average)`,
-          details: { search_id: searchId }
-        };
-        
-        // Store spike
-        await redis.zadd(ZSET_SPIKES, {
-          score: spike.ts,
-          member: JSON.stringify(spike)
-        });
-        
-        return spike;
-      }
-    }
-    
-    // Store current count for future comparisons
-    await redis.lpush(recentKey, count);
-    await redis.ltrim(recentKey, 0, 20); // Keep last 20 counts
-    await redis.expire(recentKey, 86400); // Expire after 24 hours
-    
-    return null;
-  } catch (e) {
-    console.error("Spike detection error:", e);
-    return null;
-  }
-}
-
-// Update sentiment tracking
-async function updateSentiment(documents) {
-  const sentiment = { positive: 0, neutral: 0, negative: 0, total: 0 };
-  
-  documents.forEach(doc => {
-    sentiment.total++;
-    if (doc.sentiment === "positive" || doc.sentiment_score > 0) sentiment.positive++;
-    else if (doc.sentiment === "negative" || doc.sentiment_score < 0) sentiment.negative++;
-    else sentiment.neutral++;
-  });
-  
-  if (sentiment.total > 0) {
-    const sentData = {
-      ts: Math.floor(Date.now() / 1000),
-      sentiment,
-      source: 'meltwater_webhook'
-    };
-    
-    await redis.zadd(ZSET_SENT, {
-      score: sentData.ts,
-      member: JSON.stringify(sentData)
-    });
-  }
+  return true; // For now, accept all
 }
 
 export default async function handler(req, res) {
@@ -154,89 +42,205 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
-  
+
   try {
-    // Verify webhook signature if needed
-    const signature = req.headers['x-meltwater-signature'];
-    if (!verifyWebhookSignature(req, signature)) {
+    // Optional: Verify webhook signature
+    const webhookSecret = process.env.MELTWATER_WEBHOOK_SECRET;
+    if (webhookSecret && !verifyWebhookSignature(req, webhookSecret)) {
       return res.status(401).json({ error: 'Invalid signature' });
     }
-    
-    // Parse webhook payload
+
+    // Parse the webhook payload
     const payload = req.body;
-    
-    // Handle different Meltwater webhook types
-    let documents = [];
-    let searchId = null;
-    
-    if (payload.documents && Array.isArray(payload.documents)) {
-      // Standard document delivery
-      documents = payload.documents;
-      searchId = payload.search_id || payload.search?.id;
-    } else if (payload.results && Array.isArray(payload.results)) {
-      // Alternative format
-      documents = payload.results;
-      searchId = payload.search_id;
-    } else if (payload.data && Array.isArray(payload.data)) {
-      // Another possible format
-      documents = payload.data;
-      searchId = payload.metadata?.search_id;
-    } else if (payload.document) {
-      // Single document update
-      documents = [payload.document];
-      searchId = payload.search_id;
-    }
-    
-    if (documents.length === 0) {
-      console.log("No documents in webhook payload");
+    console.log('Received Meltwater webhook:', {
+      type: payload.type,
+      documentCount: payload.documents?.length || 0
+    });
+
+    // Handle different webhook event types
+    if (payload.type === 'test' || payload.test === true) {
+      // This is a test webhook from Meltwater
+      console.log('Test webhook received');
       return res.status(200).json({ 
-        ok: true, 
-        message: 'No documents to process',
-        received: new Date().toISOString()
+        status: 'success', 
+        message: 'Test webhook received successfully' 
       });
     }
+
+    // Extract documents/mentions from the payload
+    let documents = [];
     
-    // Transform and store documents
-    const mentions = [];
+    // Meltwater may send documents in different formats
+    if (payload.documents && Array.isArray(payload.documents)) {
+      documents = payload.documents;
+    } else if (payload.results && Array.isArray(payload.results)) {
+      documents = payload.results;
+    } else if (Array.isArray(payload)) {
+      documents = payload;
+    } else if (payload.data && Array.isArray(payload.data)) {
+      documents = payload.data;
+    }
+
+    console.log(`Processing ${documents.length} documents from webhook`);
+
+    // Process and store each document
+    const storedMentions = [];
     const timestamp = Math.floor(Date.now() / 1000);
-    
+    const todayKey = getTodayKey();
+
     for (const doc of documents) {
-      const mention = transformMeltwaterDocument(doc);
-      mentions.push(mention);
-      
-      // Store in Redis sorted set
-      await redis.zadd(ZSET, {
-        score: mention.published_ts || timestamp,
-        member: JSON.stringify(mention)
-      });
+      try {
+        // Transform Meltwater document to your format
+        const mention = {
+          id: `mw_stream_${doc.id || doc.document_id || timestamp}_${Math.random()}`,
+          title: doc.title || doc.headline || 'Untitled',
+          link: doc.url || doc.link || doc.permalink || '#',
+          source: doc.source_name || doc.source || doc.media_name || 'Meltwater',
+          section: 'Meltwater',
+          origin: 'meltwater',
+          published: doc.published_date || doc.date || doc.published_at || new Date().toISOString(),
+          published_ts: doc.published_timestamp || 
+                        (doc.published_date ? Math.floor(Date.parse(doc.published_date) / 1000) : timestamp),
+          matched: extractKeywords(doc),
+          reach: doc.reach || doc.circulation || doc.audience || 0,
+          sentiment: normalizeSentiment(doc),
+          sentiment_label: doc.sentiment || doc.sentiment_label || null,
+          streamed: true, // Mark as streamed
+          received_at: new Date().toISOString()
+        };
+
+        // Store in Redis with timestamp as score
+        const mentionJson = JSON.stringify(mention);
+        
+        // Add to both main set and streamed set
+        await redis.zadd(ZSET, {
+          score: mention.published_ts,
+          member: mentionJson
+        });
+        
+        await redis.zadd(STREAM_ZSET, {
+          score: timestamp,
+          member: mentionJson
+        });
+
+        // Increment counters
+        await redis.incr(COUNTER_KEY);
+        await redis.incr(todayKey);
+
+        storedMentions.push(mention);
+        
+        console.log(`Stored mention: ${mention.title}`);
+      } catch (error) {
+        console.error('Error processing document:', error, doc);
+      }
     }
-    
-    // Update sentiment tracking
-    await updateSentiment(documents);
-    
-    // Check for spikes
-    let spike = null;
-    if (searchId) {
-      spike = await detectSpike(searchId, documents.length);
+
+    // Set expiry on daily counter (expires after 7 days)
+    if (documents.length > 0) {
+      await redis.expire(todayKey, 7 * 24 * 60 * 60);
     }
-    
-    // Log webhook receipt
-    console.log(`Meltwater webhook: ${mentions.length} documents processed${spike ? ' (spike detected)' : ''}`);
-    
-    // Return success response
+
+    // Optional: Trigger real-time update to connected clients
+    // This could be via WebSockets, Server-Sent Events, or Pusher
+    if (storedMentions.length > 0) {
+      await notifyClients(storedMentions);
+    }
+
+    // Respond to Meltwater
     res.status(200).json({
-      ok: true,
-      processed: mentions.length,
-      search_id: searchId,
-      spike_detected: spike !== null,
-      received: new Date().toISOString()
+      status: 'success',
+      processed: storedMentions.length,
+      timestamp: new Date().toISOString()
     });
+
+  } catch (error) {
+    console.error('Webhook processing error:', error);
     
-  } catch (e) {
-    console.error("Webhook error:", e);
-    res.status(500).json({ 
-      ok: false, 
-      error: process.env.NODE_ENV === 'development' ? e?.message : 'Processing error'
+    // Return 200 to prevent Meltwater from retrying
+    // Log the error for debugging
+    res.status(200).json({
+      status: 'error',
+      message: 'Internal processing error, logged for review'
     });
+  }
+}
+
+// Helper functions
+function normalizeSentiment(doc) {
+  if (typeof doc.sentiment_score === 'number') {
+    return doc.sentiment_score;
+  }
+  const sentiment = (doc.sentiment || '').toLowerCase();
+  if (sentiment === 'positive') return 1;
+  if (sentiment === 'negative') return -1;
+  if (sentiment === 'neutral') return 0;
+  return undefined;
+}
+
+function extractKeywords(doc) {
+  const keywords = [];
+  
+  if (doc.source_type) keywords.push(doc.source_type);
+  if (doc.sentiment) keywords.push(`sentiment-${doc.sentiment.toLowerCase()}`);
+  if (doc.country) keywords.push(doc.country);
+  if (doc.language) keywords.push(doc.language);
+  
+  // Add tags if present
+  if (doc.tags && Array.isArray(doc.tags)) {
+    keywords.push(...doc.tags);
+  }
+  
+  // Extract crypto-related keywords from title
+  const title = (doc.title || '').toLowerCase();
+  const cryptoKeywords = [
+    'bitcoin', 'btc', 'ethereum', 'eth', 
+    'crypto', 'cryptocurrency', 'blockchain',
+    'coinbase', 'defi', 'nft', 'web3'
+  ];
+  
+  cryptoKeywords.forEach(keyword => {
+    if (title.includes(keyword)) {
+      keywords.push(keyword);
+    }
+  });
+  
+  // Add source type
+  if (doc.source_type) {
+    keywords.push(`type-${doc.source_type.toLowerCase()}`);
+  }
+  
+  return [...new Set(keywords)]; // Remove duplicates
+}
+
+// Optional: Notify connected clients of new mentions
+async function notifyClients(mentions) {
+  // If using Pusher or similar service
+  if (process.env.PUSHER_APP_ID) {
+    // const Pusher = require('pusher');
+    // const pusher = new Pusher({
+    //   appId: process.env.PUSHER_APP_ID,
+    //   key: process.env.PUSHER_KEY,
+    //   secret: process.env.PUSHER_SECRET,
+    //   cluster: process.env.PUSHER_CLUSTER
+    // });
+    // 
+    // await pusher.trigger('mentions', 'new-mentions', {
+    //   mentions: mentions,
+    //   count: mentions.length,
+    //   timestamp: new Date().toISOString()
+    // });
+  }
+  
+  // Or store in a Redis pub/sub channel for SSE
+  if (mentions.length > 0) {
+    try {
+      await redis.publish('mentions:updates', JSON.stringify({
+        type: 'new_mentions',
+        count: mentions.length,
+        mentions: mentions.slice(0, 5) // Send preview of first 5
+      }));
+    } catch (error) {
+      console.error('Error publishing update:', error);
+    }
   }
 }

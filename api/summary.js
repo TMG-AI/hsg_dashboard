@@ -1,5 +1,4 @@
-// /api/summary.js
-// FIXED: Properly counts from Redis + Meltwater API with fallback
+// /api/summary.js - Updated to use streamed counts
 import { Redis } from "@upstash/redis";
 
 const redis = new Redis({
@@ -8,6 +7,15 @@ const redis = new Redis({
 });
 
 const ZSET = "mentions:z";
+const STREAM_ZSET = "mentions:streamed:z";
+
+function getTodayKey() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `meltwater:stream:daily:${year}-${month}-${day}`;
+}
 
 /* --- time windows (ET "today") --- */
 function rangeTodayET() {
@@ -77,70 +85,33 @@ function detectOrigin(m) {
   return "google_alerts";
 }
 
-async function getMeltwaterCountFromAPI(window) {
-  const MELTWATER_API_KEY = process.env.MELTWATER_API_KEY;
-  const SEARCH_ID = '27558498';
-  
-  if (!MELTWATER_API_KEY) {
-    console.log('No Meltwater API key - will count from Redis');
-    return { success: false, count: 0 };
-  }
-
+// Get count of streamed Meltwater mentions for today
+async function getStreamedMeltwaterCount(window) {
   try {
-    const now = new Date();
-    let startDate, endDate;
-    
     if (window === "today") {
-      const todayET = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
-      todayET.setHours(0, 0, 0, 0);
-      startDate = todayET.toISOString().split('.')[0];
-      endDate = now.toISOString().split('.')[0];
+      // Get today's counter directly from Redis
+      const todayKey = getTodayKey();
+      const count = await redis.get(todayKey);
+      console.log(`Streamed Meltwater count for today: ${count || 0}`);
+      return parseInt(count || 0);
     } else {
-      startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString().split('.')[0];
-      endDate = now.toISOString().split('.')[0];
+      // For 24h window, count from the streamed set
+      const now = Math.floor(Date.now() / 1000);
+      const dayAgo = now - (24 * 60 * 60);
+      
+      // Get streamed mentions from the last 24 hours
+      const streamedMentions = await redis.zrangebyscore(
+        STREAM_ZSET, 
+        dayAgo, 
+        now
+      );
+      
+      console.log(`Streamed Meltwater count (24h): ${streamedMentions.length}`);
+      return streamedMentions.length;
     }
-
-    console.log(`Getting Meltwater count from ${startDate} to ${endDate}`);
-
-    const response = await fetch(`https://api.meltwater.com/v3/search/${SEARCH_ID}`, {
-      method: 'POST',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        'apikey': MELTWATER_API_KEY
-      },
-      body: JSON.stringify({
-        start: startDate,
-        end: endDate,
-        tz: "America/New_York",
-        sort_by: "date",
-        sort_order: "desc",
-        template: {
-          name: "api.json"
-        },
-        page_size: 100
-      })
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Meltwater API error:', response.status, errorText);
-      return { success: false, count: 0 };
-    }
-
-    const data = await response.json();
-    
-    let articles = [];
-    if (data.results) articles = data.results;
-    else if (data.documents) articles = data.documents;
-    else if (Array.isArray(data)) articles = data;
-    else if (data.data && Array.isArray(data.data)) articles = data.data;
-    
-    console.log(`Meltwater API returned ${articles.length} articles`);
-    return { success: true, count: articles.length };
   } catch (error) {
-    console.error('Error fetching Meltwater count:', error);
-    return { success: false, count: 0 };
+    console.error('Error getting streamed count:', error);
+    return 0;
   }
 }
 
@@ -149,7 +120,7 @@ export default async function handler(req, res) {
     const win = (req.query?.window || req.query?.w || "today").toString();
     const [start, end] = win === "24h" ? range24h() : rangeTodayET();
 
-    // Fetch ALL from Redis
+    // Fetch ALL from Redis (main set)
     const raw = await redis.zrange(ZSET, 0, 5000, { rev: true });
     const items = raw.map(toObj).filter(Boolean);
     console.log(`Total items in Redis: ${items.length}`);
@@ -162,13 +133,13 @@ export default async function handler(req, res) {
 
     // Initialize counts
     const by = { meltwater: 0, google_alerts: 0, rss: 0, reddit: 0, x: 0, other: 0 };
-    let meltwaterCountFromRedis = 0;
 
-    // Count items from Redis by origin
+    // Count non-Meltwater items from Redis
     for (const m of inWin) {
       const o = detectOrigin(m);
       if (o === "meltwater") {
-        meltwaterCountFromRedis++;
+        // Skip - we'll use the streamed count
+        continue;
       } else if (by.hasOwnProperty(o)) {
         by[o] += 1;
       } else {
@@ -176,22 +147,20 @@ export default async function handler(req, res) {
       }
     }
 
-    console.log(`Meltwater items in Redis: ${meltwaterCountFromRedis}`);
-    console.log(`Other items: GA=${by.google_alerts}, RSS=${by.rss}`);
+    // Get Meltwater count from streaming data
+    const streamedCount = await getStreamedMeltwaterCount(win);
+    by.meltwater = streamedCount;
 
-    // Try to get fresh Meltwater count from API
-    const { success: apiSuccess, count: meltwaterAPICount } = await getMeltwaterCountFromAPI(win === "24h" ? "24h" : "today");
-    
-    // Use API count if available, otherwise fall back to Redis count
-    if (apiSuccess) {
-      console.log('Using fresh Meltwater count from API');
-      by.meltwater = meltwaterAPICount;
-    } else {
-      console.log('Using Meltwater count from Redis (API unavailable)');
-      by.meltwater = meltwaterCountFromRedis;
-    }
-    
+    console.log(`Final counts: MW=${by.meltwater} (streamed), GA=${by.google_alerts}, RSS=${by.rss}`);
+
     const total = Object.values(by).reduce((a, b) => a + b, 0);
+
+    // Get real-time stats if available
+    const realtimeStats = {
+      streaming_active: streamedCount > 0,
+      last_streamed: await redis.get('meltwater:last_stream_time') || null,
+      total_streamed_today: streamedCount
+    };
 
     res.status(200).json({
       ok: true,
@@ -200,6 +169,7 @@ export default async function handler(req, res) {
         all: total, 
         by_origin: by 
       },
+      realtime: realtimeStats,
       top_publishers: [],
       generated_at: new Date().toISOString(),
     });

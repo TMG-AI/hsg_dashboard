@@ -38,7 +38,7 @@
       border:1px solid rgba(139,195,74,.2);transition:.3s;text-align:center
     }
     .summary-item:hover{transform:translateY(-2px);box-shadow:0 8px 30px rgba(0,0,0,.12);border-color:rgba(139,195,74,.4)}
-    .summary-label{color:#333;font-size:16px;font-weight:700;margin-bottom:16px;text-transform:uppercase;letter-spacing:.8px}
+    .summary-label{color:#333;font-size:16px;font-weight:700;margin-bottom:16px;text-transform:uppercase;letter-spacing:.8px;min-height:40px;display:flex;align-items:flex-end;justify-content:center}
     .summary-value{font-size:32px;font-weight:700;color:#4a6741;margin:0}
 
     .wrap{max-width:1200px;margin:0 auto;padding:32px 24px}
@@ -59,6 +59,7 @@
     .chip{background:linear-gradient(135deg,rgba(139,195,74,.15),rgba(139,195,74,.25));border:1px solid rgba(139,195,74,.3);border-radius:12px;padding:6px 12px;margin:4px 6px 4px 0;font-size:12px;font-weight:500;display:inline-block;color:#4a6741;transition:.3s}
     .chip:hover{background:linear-gradient(135deg,rgba(139,195,74,.25),rgba(139,195,74,.35));transform:scale(1.05)}
     .chip-container{margin-top:16px;padding-top:16px;border-top:1px solid rgba(139,195,74,.2)}
+    .article-summary{color:#666;font-size:14px;line-height:1.5;margin-top:12px;padding-top:12px;border-top:1px solid rgba(139,195,74,.2)}
 
     .loading{display:flex;align-items:center;justify-content:center;padding:40px;color:#666}
     .loading::before{content:'';width:20px;height:20px;border:2px solid rgba(139,195,74,.3);border-top:2px solid #8bc34a;border-radius:50%;animation:spin 1s linear infinite;margin-right:12px}
@@ -233,14 +234,14 @@
           const div=document.createElement('div');
           div.className='card';
           div.style.animationDelay=`${delay}s`;
-          const chips=(article.matched||[]).map(k=>`<span class="chip">${k}</span>`).join('');
+          const summary = article.summary ? `<div class="article-summary">${article.summary}</div>` : '';
           div.innerHTML=`
             <div class="card-content">
               <h3 class="card-title"><a href="${article.link}" target="_blank" rel="noopener">${article.title}</a></h3>
               <div class="meta">
                 <div>${article.source} · ${formatDate(article.published)}</div>
               </div>
-              ${chips?`<div class="chip-container">${chips}</div>`:''}
+              ${summary}
             </div>`;
           container.appendChild(div);
           resolve();
@@ -314,7 +315,6 @@
     });
 
     loadMentions();
-    setInterval(loadMentions, 60*1000);
   </script>
 
   <!-- Summary data loading only -->

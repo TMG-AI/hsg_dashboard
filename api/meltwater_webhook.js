@@ -102,6 +102,7 @@ export default async function handler(req, res) {
           published_ts: doc.published_timestamp || 
                         (doc.published_date ? Math.floor(Date.parse(doc.published_date) / 1000) : timestamp),
           matched: extractKeywords(doc),
+          summary: doc.document_opening_text || doc.content || "",
           reach: doc.reach || doc.circulation || doc.audience || 0,
           sentiment: normalizeSentiment(doc),
           sentiment_label: doc.sentiment || doc.sentiment_label || null,

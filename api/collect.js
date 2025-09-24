@@ -201,6 +201,7 @@ export default async function handler(req, res) {
             link,
             source: displaySource(link, feedTitle),
             matched,
+            summary: sum,
             published_ts: ts,
             published: new Date(ts * 1000).toISOString()
           };

@@ -90,13 +90,27 @@ export default async function handler(req, res) {
 
     for (const doc of documents) {
       try {
-        // Debug: Log the document structure to understand field names
-        console.log('Meltwater document fields:', Object.keys(doc));
-        console.log('Title fields:', {
+        // Debug: Log the full document structure to understand field names
+        console.log('=== MELTWATER DEBUG ===');
+        console.log('All document fields:', Object.keys(doc));
+        console.log('Title-related fields:', {
           document_title: doc.document_title,
           title: doc.title,
           headline: doc.headline
         });
+        console.log('Source-related fields:', {
+          source_name: doc.source_name,
+          source: doc.source,
+          media_name: doc.media_name
+        });
+        console.log('URL-related fields:', {
+          document_url: doc.document_url,
+          url: doc.url,
+          link: doc.link,
+          permalink: doc.permalink
+        });
+        console.log('Full document object:', JSON.stringify(doc, null, 2));
+        console.log('=== END DEBUG ===');
 
         // Transform Meltwater document to your format
         const mention = {

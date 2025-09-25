@@ -242,9 +242,10 @@
             } else if (typeof article.summary === 'object') {
               // For Meltwater object summaries, try different fields
               summaryText = article.summary.opening_text ||
-                           article.summary.title ||
                            article.summary.byline ||
-                           JSON.stringify(article.summary);
+                           article.summary.content ||
+                           article.summary.description ||
+                           ''; // Don't fallback to JSON.stringify
             }
           }
           const summary = summaryText ? `<div class="article-summary">${summaryText}</div>` : '';

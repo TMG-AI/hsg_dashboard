@@ -99,9 +99,35 @@ export default async function handler(req, res) {
         console.log('=== END WEBHOOK DEBUG ===');
 
         // Transform Meltwater document to your format
+        // Handle title extraction - sometimes it's in summary.title
+        let extractedTitle = doc.summary?.title || doc.document_title || doc.title || doc.headline;
+        if (!extractedTitle || extractedTitle === 'Untitled') {
+          // If we have a summary object, try to extract title from it
+          if (doc.summary && typeof doc.summary === 'object') {
+            extractedTitle = doc.summary.title || extractedTitle || 'Untitled';
+          }
+        }
+
+        // Handle summary extraction - try multiple fields and handle both string and object
+        let extractedSummary = '';
+        if (doc.summary) {
+          if (typeof doc.summary === 'string') {
+            extractedSummary = doc.summary;
+          } else if (typeof doc.summary === 'object') {
+            // Try opening_text first, then other fields
+            extractedSummary = doc.summary.opening_text ||
+                               doc.summary.byline ||
+                               doc.summary.content ||
+                               '';
+          }
+        }
+        if (!extractedSummary) {
+          extractedSummary = doc.document_opening_text || doc.content || doc.description || '';
+        }
+
         const mention = {
           id: `mw_stream_${doc.document_id || doc.id || timestamp}_${Math.random()}`,
-          title: doc.summary?.title || doc.document_title || doc.title || doc.headline || 'Untitled',
+          title: extractedTitle || 'Untitled',
           link: doc.document_url || doc.url || doc.link || doc.permalink || '#',
           source: doc.source?.name || doc.source_name || doc.media_name || 'Meltwater',
           section: 'Meltwater',
@@ -111,7 +137,7 @@ export default async function handler(req, res) {
                         (doc.document_publish_date ? Math.floor(Date.parse(doc.document_publish_date) / 1000) :
                          doc.published_date ? Math.floor(Date.parse(doc.published_date) / 1000) : timestamp),
           matched: extractKeywords(doc),
-          summary: doc.summary?.opening_text || doc.document_opening_text || doc.content || "",
+          summary: extractedSummary,
           reach: doc.reach || doc.circulation || doc.audience || 0,
           sentiment: normalizeSentiment(doc),
           sentiment_label: doc.sentiment || doc.sentiment_label || null,

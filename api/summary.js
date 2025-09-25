@@ -233,14 +233,29 @@ async function getMeltwaterCountFromAPI(window) {
       topLevelKeys: Object.keys(data || {}),
       resultsLength: data.results?.length,
       documentsLength: data.documents?.length,
-      dataLength: data.data?.length
+      dataLength: data.data?.length,
+      resultKeys: data.result ? Object.keys(data.result) : null,
+      resultDocuments: data.result?.documents?.length,
+      resultDocumentCount: data.result?.document_count
     });
 
     let articles = [];
-    if (data.results) articles = data.results;
-    else if (data.documents) articles = data.documents;
-    else if (Array.isArray(data)) articles = data;
-    else if (data.data && Array.isArray(data.data)) articles = data.data;
+    if (data.result && Array.isArray(data.result.documents)) {
+      // Meltwater API v3 structure: data.result.documents
+      articles = data.result.documents;
+    } else if (data.result && typeof data.result.document_count === 'number') {
+      // If result has document_count but no documents array, use count directly
+      console.log(`Meltwater API shows ${data.result.document_count} articles available`);
+      return { success: true, count: data.result.document_count };
+    } else if (data.results) {
+      articles = data.results;
+    } else if (data.documents) {
+      articles = data.documents;
+    } else if (Array.isArray(data)) {
+      articles = data;
+    } else if (data.data && Array.isArray(data.data)) {
+      articles = data.data;
+    }
 
     console.log(`Meltwater API returned ${articles.length} articles`);
 

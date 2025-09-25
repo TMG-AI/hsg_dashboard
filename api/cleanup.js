@@ -29,8 +29,9 @@ function shouldRemove(mention) {
 
   const hasInvalidSource = !mention.source ||
     mention.source === '[object Object]' ||
-    mention.source.includes('[object') ||
-    mention.source.trim() === '';
+    (typeof mention.source === 'string' && mention.source.includes('[object')) ||
+    (typeof mention.source === 'string' && mention.source.trim() === '') ||
+    typeof mention.source !== 'string';
 
   const hasInvalidSummary = mention.summary &&
     typeof mention.summary === 'object' &&

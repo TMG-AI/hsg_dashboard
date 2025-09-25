@@ -116,14 +116,35 @@ async function getStreamedMeltwaterCount(window) {
   }
 }
 
-// Get HISTORICAL count from Meltwater API
+// Get HISTORICAL count from Meltwater API (with caching to prevent rate limits)
 async function getMeltwaterCountFromAPI(window) {
   const MELTWATER_API_KEY = process.env.MELTWATER_API_KEY;
   const SEARCH_ID = '27558498';
-  
+
   if (!MELTWATER_API_KEY) {
     console.log('No Meltwater API key - will count from Redis');
     return { success: false, count: 0 };
+  }
+
+  // Check cache first (15 minute cache to prevent rate limiting)
+  const cacheKey = `meltwater:api:count:${window}`;
+  try {
+    const cached = await redis.get(cacheKey);
+    if (cached) {
+      const cachedData = JSON.parse(cached);
+      console.log(`Using cached Meltwater count: ${cachedData.count} (cached ${Math.floor((Date.now() - cachedData.timestamp) / 1000 / 60)} minutes ago)`);
+      return { success: true, count: cachedData.count, cached: true };
+    }
+
+    // Check if we're in a rate limit cooldown period
+    const rateLimitCache = await redis.get(`${cacheKey}:ratelimited`);
+    if (rateLimitCache) {
+      const rateLimitData = JSON.parse(rateLimitCache);
+      console.log('Still in rate limit cooldown period - skipping API call');
+      return { success: false, count: 0, rateLimited: true };
+    }
+  } catch (e) {
+    console.log('Cache read error, proceeding with API call');
   }
 
   try {
@@ -164,7 +185,19 @@ async function getMeltwaterCountFromAPI(window) {
 
     // Handle rate limiting
     if (response.status === 429) {
-      console.log('Meltwater API rate limited');
+      console.log('Meltwater API rate limited - caching failure for 30 minutes');
+
+      // Cache the rate limit status to prevent repeated calls
+      try {
+        const rateLimitCache = {
+          rateLimited: true,
+          timestamp: Date.now()
+        };
+        await redis.setex(`${cacheKey}:ratelimited`, 30 * 60, JSON.stringify(rateLimitCache)); // 30 minute cooldown
+      } catch (e) {
+        console.log('Failed to cache rate limit status');
+      }
+
       return { success: false, count: 0, rateLimited: true };
     }
 
@@ -183,6 +216,19 @@ async function getMeltwaterCountFromAPI(window) {
     else if (data.data && Array.isArray(data.data)) articles = data.data;
     
     console.log(`Meltwater API returned ${articles.length} articles`);
+
+    // Cache the result for 15 minutes to prevent rate limiting
+    try {
+      const cacheData = {
+        count: articles.length,
+        timestamp: Date.now()
+      };
+      await redis.setex(cacheKey, 15 * 60, JSON.stringify(cacheData)); // 15 minute cache
+      console.log('Cached Meltwater API result for 15 minutes');
+    } catch (e) {
+      console.log('Failed to cache result:', e.message);
+    }
+
     return { success: true, count: articles.length };
   } catch (error) {
     console.error('Error fetching Meltwater count:', error);

@@ -90,17 +90,26 @@ export default async function handler(req, res) {
 
     for (const doc of documents) {
       try {
+        // Debug: Log the document structure to understand field names
+        console.log('Meltwater document fields:', Object.keys(doc));
+        console.log('Title fields:', {
+          document_title: doc.document_title,
+          title: doc.title,
+          headline: doc.headline
+        });
+
         // Transform Meltwater document to your format
         const mention = {
-          id: `mw_stream_${doc.id || doc.document_id || timestamp}_${Math.random()}`,
-          title: doc.title || doc.headline || 'Untitled',
-          link: doc.url || doc.link || doc.permalink || '#',
+          id: `mw_stream_${doc.document_id || doc.id || timestamp}_${Math.random()}`,
+          title: doc.document_title || doc.title || doc.headline || 'Untitled',
+          link: doc.document_url || doc.url || doc.link || doc.permalink || '#',
           source: doc.source_name || doc.source || doc.media_name || 'Meltwater',
           section: 'Meltwater',
           origin: 'meltwater',
-          published: doc.published_date || doc.date || doc.published_at || new Date().toISOString(),
-          published_ts: doc.published_timestamp || 
-                        (doc.published_date ? Math.floor(Date.parse(doc.published_date) / 1000) : timestamp),
+          published: doc.document_publish_date || doc.published_date || doc.date || doc.published_at || new Date().toISOString(),
+          published_ts: doc.published_timestamp ||
+                        (doc.document_publish_date ? Math.floor(Date.parse(doc.document_publish_date) / 1000) :
+                         doc.published_date ? Math.floor(Date.parse(doc.published_date) / 1000) : timestamp),
           matched: extractKeywords(doc),
           summary: doc.document_opening_text || doc.content || "",
           reach: doc.reach || doc.circulation || doc.audience || 0,

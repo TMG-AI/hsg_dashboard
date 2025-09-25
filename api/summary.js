@@ -155,9 +155,7 @@ async function getMeltwaterCountFromAPI(window) {
     console.log('Cache read error:', e.message, '- proceeding with API call');
   }
 
-  // TEMPORARY: Skip API calls entirely to prevent further rate limiting
-  console.log('TEMPORARILY DISABLING API CALLS TO PREVENT RATE LIMITS');
-  return { success: false, count: 0, rateLimited: true };
+  // Re-enabled API calls with caching - rate limits should have reset
 
   try {
     const now = new Date();

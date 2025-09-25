@@ -135,10 +135,15 @@ async function getMeltwaterCountFromAPI(window) {
     console.log(`Cache result for ${cacheKey}:`, cached ? 'HIT' : 'MISS');
 
     if (cached) {
-      const cachedData = JSON.parse(cached);
-      const ageMinutes = Math.floor((Date.now() - cachedData.timestamp) / 1000 / 60);
-      console.log(`Using cached Meltwater count: ${cachedData.count} (cached ${ageMinutes} minutes ago)`);
-      return { success: true, count: cachedData.count, cached: true };
+      try {
+        const cachedData = JSON.parse(cached);
+        const ageMinutes = Math.floor((Date.now() - cachedData.timestamp) / 1000 / 60);
+        console.log(`Using cached Meltwater count: ${cachedData.count} (cached ${ageMinutes} minutes ago)`);
+        return { success: true, count: cachedData.count, cached: true };
+      } catch (parseError) {
+        console.log('Cache parse error - clearing invalid cache:', parseError.message);
+        await redis.del(cacheKey); // Clear invalid cache
+      }
     }
 
     // Check if we're in a rate limit cooldown period
@@ -218,13 +223,25 @@ async function getMeltwaterCountFromAPI(window) {
     }
 
     const data = await response.json();
-    
+
+    // Debug API response structure
+    console.log('Meltwater API response structure:', {
+      hasResults: !!data.results,
+      hasDocuments: !!data.documents,
+      hasData: !!data.data,
+      isArray: Array.isArray(data),
+      topLevelKeys: Object.keys(data || {}),
+      resultsLength: data.results?.length,
+      documentsLength: data.documents?.length,
+      dataLength: data.data?.length
+    });
+
     let articles = [];
     if (data.results) articles = data.results;
     else if (data.documents) articles = data.documents;
     else if (Array.isArray(data)) articles = data;
     else if (data.data && Array.isArray(data.data)) articles = data.data;
-    
+
     console.log(`Meltwater API returned ${articles.length} articles`);
 
     // Cache the result for 15 minutes to prevent rate limiting

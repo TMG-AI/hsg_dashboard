@@ -136,12 +136,26 @@ async function getMeltwaterCountFromAPI(window) {
 
     if (cached) {
       try {
-        const cachedData = JSON.parse(cached);
+        // Handle case where cache might be an object instead of JSON string
+        let cachedData;
+        if (typeof cached === 'string') {
+          cachedData = JSON.parse(cached);
+        } else if (typeof cached === 'object' && cached !== null) {
+          cachedData = cached; // Already an object
+        } else {
+          throw new Error(`Invalid cache type: ${typeof cached}`);
+        }
+
+        // Validate cache structure
+        if (typeof cachedData.count !== 'number' || typeof cachedData.timestamp !== 'number') {
+          throw new Error('Invalid cache structure');
+        }
+
         const ageMinutes = Math.floor((Date.now() - cachedData.timestamp) / 1000 / 60);
         console.log(`Using cached Meltwater count: ${cachedData.count} (cached ${ageMinutes} minutes ago)`);
         return { success: true, count: cachedData.count, cached: true };
       } catch (parseError) {
-        console.log('Cache parse error - clearing invalid cache:', parseError.message);
+        console.log('Cache parse error - clearing invalid cache:', parseError.message, 'Raw cache value:', typeof cached, cached);
         await redis.del(cacheKey); // Clear invalid cache
       }
     }

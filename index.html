@@ -234,7 +234,20 @@
           const div=document.createElement('div');
           div.className='card';
           div.style.animationDelay=`${delay}s`;
-          const summary = article.summary ? `<div class="article-summary">${article.summary}</div>` : '';
+          // Handle both string summaries (RSS) and object summaries (Meltwater)
+          let summaryText = '';
+          if (article.summary) {
+            if (typeof article.summary === 'string') {
+              summaryText = article.summary;
+            } else if (typeof article.summary === 'object') {
+              // For Meltwater object summaries, try different fields
+              summaryText = article.summary.opening_text ||
+                           article.summary.title ||
+                           article.summary.byline ||
+                           JSON.stringify(article.summary);
+            }
+          }
+          const summary = summaryText ? `<div class="article-summary">${summaryText}</div>` : '';
           div.innerHTML=`
             <div class="card-content">
               <h3 class="card-title"><a href="${article.link}" target="_blank" rel="noopener">${article.title}</a></h3>

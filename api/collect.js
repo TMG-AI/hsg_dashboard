@@ -157,12 +157,40 @@ async function sendEmail(m){
 // ---- handler ----
 export default async function handler(req, res) {
   try {
-    if (!RSS_FEEDS.length || !KEYWORDS.length) {
-      res.status(400).json({ ok: false, error: "Missing RSS_FEEDS or KEYWORDS" });
+    let found = 0, stored = 0, emailed = 0, errors = [];
+
+    // Check if RSS feeds are configured
+    if (!RSS_FEEDS.length) {
+      console.log('RSS_FEEDS not configured - skipping RSS collection');
+      res.status(200).json({
+        ok: true,
+        message: "RSS collection disabled - no feeds configured",
+        found: 0,
+        stored: 0,
+        emailed: 0,
+        errors: [],
+        rss_disabled: true,
+        generated_at: new Date().toISOString()
+      });
       return;
     }
 
-    let found = 0, stored = 0, emailed = 0, errors = [];
+    if (!KEYWORDS.length) {
+      console.log('KEYWORDS not configured - skipping RSS collection');
+      res.status(200).json({
+        ok: true,
+        message: "RSS collection disabled - no keywords configured",
+        found: 0,
+        stored: 0,
+        emailed: 0,
+        errors: [],
+        keywords_disabled: true,
+        generated_at: new Date().toISOString()
+      });
+      return;
+    }
+
+    console.log(`RSS collection starting: ${RSS_FEEDS.length} feeds, ${KEYWORDS.length} keywords`);
 
     for (const url of RSS_FEEDS) {
       try {

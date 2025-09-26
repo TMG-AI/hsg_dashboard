@@ -69,19 +69,33 @@ const RSS_HOSTS = new Set([
 ]);
 
 function detectOrigin(m) {
-  if (m && typeof m.origin === "string" && m.origin) return m.origin;
+  // Check explicit origin field first
+  if (m && typeof m.origin === "string" && m.origin && m.origin !== "") {
+    return m.origin;
+  }
 
+  // Check for Meltwater indicators
   const prov = (m?.provider || "").toLowerCase();
   if (
     prov.includes("meltwater") ||
     m?.section === "Meltwater" ||
-    (Array.isArray(m?.matched) && m.matched.includes("meltwater-alert"))
+    (Array.isArray(m?.matched) && m.matched.includes("meltwater-alert")) ||
+    (m?.id && m.id.startsWith("mw_stream_"))
   ) {
     return "meltwater";
   }
 
+  // Check if it's RSS based on host
   const host = safeHost(m?.link || m?.canon || "");
   if (host && RSS_HOSTS.has(host)) return "rss";
+
+  // Check section indicators for RSS
+  const section = (m?.section || "").toLowerCase();
+  if (section.includes("top crypto news") ||
+      section.includes("major sources") ||
+      section.includes("aggregators")) {
+    return "rss";
+  }
 
   return "google_alerts";
 }

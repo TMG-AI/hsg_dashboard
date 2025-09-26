@@ -155,10 +155,6 @@
         <div class="summary-value" id="sb-mw">—</div>
       </div>
       <div class="summary-item">
-        <div class="summary-label">RSS Feeds</div>
-        <div class="summary-value" id="sb-rss">—</div>
-      </div>
-      <div class="summary-item">
         <div class="summary-label">Reddit</div>
         <div class="summary-value" id="sb-reddit">—</div>
       </div>
@@ -346,7 +342,6 @@
       setText('sb-total',  data.totals?.all);
       setText('sb-ga',     by.google_alerts || by.google || 0);
       setText('sb-mw',     by.meltwater || 0);
-      setText('sb-rss',    by.rss || 0);
       setText('sb-reddit', by.reddit || 0);
       setText('sb-x',      by.x || 0);
 

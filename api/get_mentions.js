@@ -184,6 +184,7 @@ export default async function handler(req, res) {
       matched: Array.isArray(m.matched) ? m.matched : [],
       published: m.published || (m.published_ts ? new Date(m.published_ts * 1000).toISOString() : null),
       published_ts: typeof m.published_ts === "number" ? m.published_ts : (m.published ? Math.floor(Date.parse(m.published) / 1000) : 0),
+      summary: m.summary || "",
       reach: m.reach || 0,
       sentiment: m.sentiment,
       sentiment_label: m.sentiment_label || null

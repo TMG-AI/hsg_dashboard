@@ -146,31 +146,12 @@ export default async function handler(req, res) {
       console.error("Redis fetch error:", redisError);
     }
 
-    // 2. Try to get fresh Meltwater from API
-    const { success: apiSuccess, articles: meltwaterAPIItems } = await getMeltwaterFromAPI();
-    
-    // 3. Smart deduplication strategy
-    let finalItems = [];
-    
-    if (apiSuccess && meltwaterAPIItems.length > 0) {
-      // API worked - use API for Meltwater, Redis for everything else
-      console.log('Using fresh Meltwater from API');
-      
-      // Filter out Meltwater items from Redis (we have fresh ones from API)
-      const nonMeltwaterRedisItems = redisItems.filter(item => {
-        const itemOrigin = (item.origin || "").toLowerCase();
-        return itemOrigin !== 'meltwater';
-      });
-      
-      // Combine fresh Meltwater with other Redis items
-      finalItems = [...meltwaterAPIItems, ...nonMeltwaterRedisItems];
-    } else {
-      // API failed - use everything from Redis including old Meltwater
-      console.log('Meltwater API unavailable, using all Redis data');
-      finalItems = redisItems;
-    }
+    // 2. Use Redis data only (includes real-time streaming Meltwater data)
+    // No API calls needed since webhooks provide real-time data
+    console.log('Using all data from Redis (includes real-time streaming Meltwater)');
+    let finalItems = redisItems;
 
-    // 4. Apply filters
+    // 3. Apply filters
     if (origin) {
       finalItems = finalItems.filter(m => (m.origin || "").toLowerCase() === origin);
     }
@@ -185,14 +166,14 @@ export default async function handler(req, res) {
       );
     }
 
-    // 5. Sort by date (newest first)
+    // 4. Sort by date (newest first)
     finalItems.sort((a, b) => {
       const tsA = b.published_ts || 0;
       const tsB = a.published_ts || 0;
       return tsA - tsB;
     });
 
-    // 6. Apply limit and clean up response
+    // 5. Apply limit and clean up response
     const out = finalItems.slice(0, limit).map(m => ({
       id: m.id,
       title: m.title || "(untitled)",

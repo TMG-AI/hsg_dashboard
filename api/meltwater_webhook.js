@@ -90,61 +90,63 @@ export default async function handler(req, res) {
 
     for (const doc of documents) {
       try {
-        // Debug logging - what Meltwater actually sends
+        // Debug logging - NEW Meltwater format
         console.log('=== FULL DOCUMENT DEBUG ===');
         console.log('All keys:', Object.keys(doc));
-        console.log('Has summary:', !!doc.summary);
-        console.log('Summary type:', typeof doc.summary);
-        if (doc.summary && typeof doc.summary === 'object') {
-          console.log('Summary keys:', Object.keys(doc.summary));
-          console.log('Summary.title:', doc.summary.title);
-        }
-        console.log('Raw summary:', JSON.stringify(doc.summary));
+        console.log('Content field:', doc.content);
+        console.log('Source field:', doc.source);
+        console.log('URL field:', doc.url);
         console.log('=== END DEBUG ===');
 
-        // Transform Meltwater document to your format
-        // Handle title extraction - sometimes it's in summary.title
-        let extractedTitle = doc.summary?.title || doc.document_title || doc.title || doc.headline;
-        if (!extractedTitle || extractedTitle === 'Untitled') {
-          // If we have a summary object, try to extract title from it
-          if (doc.summary && typeof doc.summary === 'object') {
-            extractedTitle = doc.summary.title || extractedTitle || 'Untitled';
+        // NEW: Extract title from content field (Meltwater changed format)
+        let extractedTitle = '';
+        if (doc.content && typeof doc.content === 'string') {
+          // Use first sentence as title
+          extractedTitle = doc.content.split('\n')[0].split('.')[0].trim();
+          if (extractedTitle.length > 100) {
+            extractedTitle = extractedTitle.substring(0, 100) + '...';
           }
+        } else if (doc.content && typeof doc.content === 'object') {
+          extractedTitle = doc.content.title || doc.content.headline || '';
+        }
+        if (!extractedTitle) {
+          extractedTitle = 'Untitled';
         }
 
-        // Handle summary extraction - try multiple fields and handle both string and object
+        // NEW: Extract summary from content field
         let extractedSummary = '';
-        if (doc.summary) {
-          if (typeof doc.summary === 'string') {
-            extractedSummary = doc.summary;
-          } else if (typeof doc.summary === 'object') {
-            // Try opening_text first, then other fields
-            extractedSummary = doc.summary.opening_text ||
-                               doc.summary.byline ||
-                               doc.summary.content ||
-                               '';
-          }
+        if (doc.content && typeof doc.content === 'string') {
+          extractedSummary = doc.content.length > 300 
+            ? doc.content.substring(0, 300) + '...'
+            : doc.content;
+        } else if (doc.content && typeof doc.content === 'object') {
+          extractedSummary = doc.content.description || doc.content.summary || '';
         }
-        if (!extractedSummary) {
-          extractedSummary = doc.document_opening_text || doc.content || doc.description || '';
+
+        // NEW: Extract source from source field
+        let extractedSource = '';
+        if (doc.source && typeof doc.source === 'object') {
+          extractedSource = doc.source.name || doc.source.title || 'Meltwater';
+        } else if (doc.source && typeof doc.source === 'string') {
+          extractedSource = doc.source;
+        } else {
+          extractedSource = 'Meltwater';
         }
 
         const mention = {
-          id: `mw_stream_${doc.document_id || doc.id || timestamp}_${Math.random()}`,
-          title: extractedTitle || 'Untitled',
-          link: doc.document_url || doc.url || doc.link || doc.permalink || '#',
-          source: doc.source?.name || doc.source_name || doc.media_name || 'Meltwater',
+          id: `mw_stream_${doc.id || doc.external_id || timestamp}_${Math.random()}`,
+          title: extractedTitle,
+          link: doc.url || '#',
+          source: extractedSource,
           section: 'Meltwater',
           origin: 'meltwater',
-          published: doc.document_publish_date || doc.published_date || doc.date || doc.published_at || new Date().toISOString(),
-          published_ts: doc.published_timestamp ||
-                        (doc.document_publish_date ? Math.floor(Date.parse(doc.document_publish_date) / 1000) :
-                         doc.published_date ? Math.floor(Date.parse(doc.published_date) / 1000) : timestamp),
+          published: doc.published_date || new Date().toISOString(),
+          published_ts: doc.published_date ? Math.floor(Date.parse(doc.published_date) / 1000) : timestamp,
           matched: extractKeywords(doc),
           summary: extractedSummary,
-          reach: doc.reach || doc.circulation || doc.audience || 0,
+          reach: doc.metrics?.reach || doc.metrics?.circulation || 0,
           sentiment: normalizeSentiment(doc),
-          sentiment_label: doc.sentiment || doc.sentiment_label || null,
+          sentiment_label: doc.sentiment || null,
           streamed: true, // Mark as streamed
           received_at: new Date().toISOString()
         };
@@ -230,8 +232,8 @@ function extractKeywords(doc) {
     keywords.push(...doc.tags);
   }
   
-  // Extract crypto-related keywords from title
-  const title = (doc.title || '').toLowerCase();
+  // Extract crypto-related keywords from content
+  const content = (doc.content || '').toLowerCase();
   const cryptoKeywords = [
     'bitcoin', 'btc', 'ethereum', 'eth', 
     'crypto', 'cryptocurrency', 'blockchain',
@@ -239,7 +241,7 @@ function extractKeywords(doc) {
   ];
   
   cryptoKeywords.forEach(keyword => {
-    if (title.includes(keyword)) {
+    if (content.includes(keyword)) {
       keywords.push(keyword);
     }
   });

@@ -1,4 +1,18 @@
-// /api/meltwater_webhook.js - Correct Git 
+for (const doc of documents) {
+  try {
+    // ADD THIS DEBUG BLOCK
+    console.log('=== FULL DOCUMENT DEBUG ===');
+    console.log('All keys:', Object.keys(doc));
+    console.log('Has summary:', !!doc.summary);
+    console.log('Summary type:', typeof doc.summary);
+    if (doc.summary && typeof doc.summary === 'object') {
+      console.log('Summary keys:', Object.keys(doc.summary));
+      console.log('Summary.title:', doc.summary.title);
+    }
+    console.log('Raw summary:', JSON.stringify(doc.summary));
+    console.log('=== END DEBUG ===');
+    
+    // existing code continues...// /api/meltwater_webhook.js - Correct Git 
 // Receives real-time mentions from Meltwater Streaming API
 import { Redis } from "@upstash/redis";
 
@@ -90,13 +104,19 @@ export default async function handler(req, res) {
 
     for (const doc of documents) {
       try {
-        // Enhanced logging for troubleshooting
-        console.log('=== MELTWATER WEBHOOK DEBUG ===');
-        console.log(`Title mapping: summary.title="${doc.summary?.title}" | title="${doc.title}" | headline="${doc.headline}"`);
-        console.log(`Source mapping: source.name="${doc.source?.name}" | source_name="${doc.source_name}"`);
-        console.log(`Summary mapping: summary.opening_text="${doc.summary?.opening_text}" | document_opening_text="${doc.document_opening_text}"`);
-        console.log(`Final values: title="${doc.summary?.title || doc.document_title || doc.title || doc.headline || 'Untitled'}" | source="${doc.source?.name || doc.source_name || doc.media_name || 'Meltwater'}"`);
-        console.log('=== END WEBHOOK DEBUG ===');
+        for (const doc of documents) {
+  try {
+    // ADD THIS DEBUG BLOCK
+    console.log('=== FULL DOCUMENT DEBUG ===');
+    console.log('All keys:', Object.keys(doc));
+    console.log('Has summary:', !!doc.summary);
+    console.log('Summary type:', typeof doc.summary);
+    if (doc.summary && typeof doc.summary === 'object') {
+      console.log('Summary keys:', Object.keys(doc.summary));
+      console.log('Summary.title:', doc.summary.title);
+    }
+    console.log('Raw summary:', JSON.stringify(doc.summary));
+    console.log('=== END DEBUG ===');
 
         // Transform Meltwater document to your format
         // Handle title extraction - sometimes it's in summary.title

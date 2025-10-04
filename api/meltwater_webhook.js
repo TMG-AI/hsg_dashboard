@@ -1,18 +1,4 @@
-for (const doc of documents) {
-  try {
-    // ADD THIS DEBUG BLOCK
-    console.log('=== FULL DOCUMENT DEBUG ===');
-    console.log('All keys:', Object.keys(doc));
-    console.log('Has summary:', !!doc.summary);
-    console.log('Summary type:', typeof doc.summary);
-    if (doc.summary && typeof doc.summary === 'object') {
-      console.log('Summary keys:', Object.keys(doc.summary));
-      console.log('Summary.title:', doc.summary.title);
-    }
-    console.log('Raw summary:', JSON.stringify(doc.summary));
-    console.log('=== END DEBUG ===');
-    
-    // existing code continues...// /api/meltwater_webhook.js - Correct Git 
+// /api/meltwater_webhook.js
 // Receives real-time mentions from Meltwater Streaming API
 import { Redis } from "@upstash/redis";
 
@@ -104,19 +90,17 @@ export default async function handler(req, res) {
 
     for (const doc of documents) {
       try {
-        for (const doc of documents) {
-  try {
-    // ADD THIS DEBUG BLOCK
-    console.log('=== FULL DOCUMENT DEBUG ===');
-    console.log('All keys:', Object.keys(doc));
-    console.log('Has summary:', !!doc.summary);
-    console.log('Summary type:', typeof doc.summary);
-    if (doc.summary && typeof doc.summary === 'object') {
-      console.log('Summary keys:', Object.keys(doc.summary));
-      console.log('Summary.title:', doc.summary.title);
-    }
-    console.log('Raw summary:', JSON.stringify(doc.summary));
-    console.log('=== END DEBUG ===');
+        // Debug logging - what Meltwater actually sends
+        console.log('=== FULL DOCUMENT DEBUG ===');
+        console.log('All keys:', Object.keys(doc));
+        console.log('Has summary:', !!doc.summary);
+        console.log('Summary type:', typeof doc.summary);
+        if (doc.summary && typeof doc.summary === 'object') {
+          console.log('Summary keys:', Object.keys(doc.summary));
+          console.log('Summary.title:', doc.summary.title);
+        }
+        console.log('Raw summary:', JSON.stringify(doc.summary));
+        console.log('=== END DEBUG ===');
 
         // Transform Meltwater document to your format
         // Handle title extraction - sometimes it's in summary.title

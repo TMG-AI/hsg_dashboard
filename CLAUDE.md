@@ -33,14 +33,15 @@ This is a **media monitoring and PR alerting system** for Coinbase that:
 ## Environment Variables
 
 Required for production:
-- `KV_REST_API_URL` - Upstash Redis URL
-- `KV_REST_API_TOKEN` - Upstash Redis token
-- `RSS_FEEDS` - Comma-separated list of RSS feed URLs
-- `KEYWORDS` - Comma-separated keywords to match
-- `ALERT_KEYWORDS_URGENT` - High-priority keywords
+- `STORAGE_KV_REST_API_URL` - Upstash Redis URL (NEW naming convention)
+- `STORAGE_KV_REST_API_TOKEN` - Upstash Redis token (NEW naming convention)
+- `RSS_FEEDS` - Semicolon or comma-separated list of RSS feed URLs
+- `KEYWORDS` - Comma-separated keywords to match (optional - accepts all if empty)
+- `CONGRESS_API_KEY` - Congress.gov API key for federal legislation
+- `ALERT_KEYWORDS_URGENT` - High-priority keywords (optional)
 - `RESEND_API_KEY` - For email notifications (optional)
-- `MELTWATER_WEBHOOK_SECRET` - Webhook verification (optional)
 - `GA_WEBHOOK_SECRET` - Google Alerts webhook auth (optional)
+- `NEWSLETTER_WEBHOOK_SECRET` - Newsletter webhook auth (optional)
 
 ## Development Commands
 

@@ -4,8 +4,8 @@ import { Resend } from "resend";
 
 // ---- clients ----
 const redis = new Redis({
-  url: process.env.KV_REST_API_URL,
-  token: process.env.KV_REST_API_TOKEN
+  url: process.env.STORAGE_KV_REST_API_URL,
+  token: process.env.STORAGE_KV_REST_API_TOKEN
 });
 
 // Enable YouTube/media fields & add requestOptions for UA
@@ -215,7 +215,7 @@ export default async function handler(req, res) {
             source: displaySource(link, feedTitle),
             matched: matched,
             summary: sum,
-            origin: "rss",
+            origin: "google_alerts",
             published_ts: ts,
             published: new Date(ts * 1000).toISOString()
           };

@@ -333,7 +333,7 @@
       const data = await res.json();
 
       // Calculate counts by origin for last 7 days
-      const by = { rss: 0, google_alerts: 0, newsletter: 0, meltwater: 0, congress: 0, other: 0 };
+      const by = { rss: 0, google_alerts: 0, newsletter: 0, congress: 0, other: 0 };
       const filtered = Array.isArray(data) ? data : [];
 
       for (const m of filtered) {
@@ -351,7 +351,7 @@
       const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = fmt(val); };
 
       setText('sb-total',      total);
-      setText('sb-ga',         by.rss || 0);  // RSS feeds are the Google Alerts
+      setText('sb-ga',         by.google_alerts || 0);  // Fixed: use google_alerts origin
       setText('sb-newsletter', by.newsletter || 0);
       setText('sb-congress',   by.congress || 0);
 

@@ -332,7 +332,7 @@ export default async function handler(req, res) {
     });
 
     // Initialize counts
-    const by = { meltwater: 0, google_alerts: 0, rss: 0, newsletter: 0, other: 0 };
+    const by = { meltwater: 0, google_alerts: 0, rss: 0, newsletter: 0, gbr: 0, gbr_meltwater: 0, other: 0 };
     let meltwaterCountFromRedis = 0;
 
     // Count items from Redis by origin (except Meltwater - we'll calculate that separately)

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>HSG Dashboard</title>
+  <title>GBR Alerts - HSG Dashboard</title>
   <style>
     *{box-sizing:border-box}
     body{
@@ -139,8 +139,8 @@
 
   <header>
     <div class="header-content">
-      <h1 class="header-title">HSG Dashboard</h1>
-      <p class="header-subtitle">China media monitoring and analysis</p>
+      <h1 class="header-title">GBR Alerts</h1>
+      <p class="header-subtitle">Global Business Report monitoring</p>
     </div>
   </header>
 
@@ -156,8 +156,8 @@
         <div class="summary-value" id="sb-ga">—</div>
       </div>
       <div class="summary-item">
-        <div class="summary-label">Newsletter</div>
-        <div class="summary-value" id="sb-newsletter">—</div>
+        <div class="summary-label">Meltwater</div>
+        <div class="summary-value" id="sb-mw">—</div>
       </div>
     </div>
   </div>
@@ -178,7 +178,7 @@
       <button id="refresh-news-btn" class="refresh-news-btn">
         <span id="refresh-btn-text">Get Latest News</span>
       </button>
-      <a href="/gbr.html" class="gbr-btn">GBR Alerts</a>
+      <a href="/index.html" class="gbr-btn">Back to Main Dashboard</a>
     </div>
 
     <div id="err"></div>
@@ -267,7 +267,7 @@
         const qs=new URLSearchParams();
         qs.set('limit','300');
 
-        const r = await fetch('/api/get_mentions?limit=300', { cache: 'no-store' });
+        const r = await fetch('/api/get_mentions?limit=300&origin=gbr', { cache: 'no-store' });
         if (!r.ok) throw new Error('HTTP '+r.status);
         const data=await r.json();
 
@@ -329,7 +329,7 @@
   <script>
   (async function(){
     try{
-      const res = await fetch('/api/summary?window=today', { cache: 'no-store' });
+      const res = await fetch('/api/summary?window=today&origin=gbr', { cache: 'no-store' });
       const data = await res.json();
       if (!data?.ok) return;
 
@@ -337,9 +337,10 @@
       const fmt = (n) => (typeof n === 'number' && Number.isFinite(n) && n.toLocaleString) ? n.toLocaleString() : (n ?? '0');
       const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = fmt(val); };
 
+      // For GBR page, show counts from GBR-specific sources
       setText('sb-total',      data.totals?.all);
-      setText('sb-ga',         by.google_alerts || by.google || 0);
-      setText('sb-newsletter', by.newsletter || 0);
+      setText('sb-ga',         by.gbr || 0);  // GBR Google Alert
+      setText('sb-mw',         by.gbr_meltwater || 0);  // GBR Meltwater
 
     } catch(e) {
       console.error('Error loading summary:', e);

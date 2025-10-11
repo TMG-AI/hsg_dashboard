@@ -40,6 +40,7 @@ const MAX_MENTIONS = 5000;
 // ---- config ----
 // Support both comma and semicolon delimiters for RSS_FEEDS
 const RSS_FEEDS = (process.env.RSS_FEEDS || "").split(/[,;]/).map(s => s.trim()).filter(Boolean);
+const GBR_FEED = (process.env.GBR_FEED || "").trim(); // Single GBR Google Alert feed
 const KEYWORDS  = (process.env.KEYWORDS  || "").split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
 const URGENT    = (process.env.ALERT_KEYWORDS_URGENT || "").split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
 
@@ -179,7 +180,12 @@ export default async function handler(req, res) {
     // No keyword filtering - collect all articles
     console.log(`RSS collection starting: ${RSS_FEEDS.length} feeds, no keyword filtering`);
 
-    for (const url of RSS_FEEDS) {
+    // Combine RSS_FEEDS and GBR_FEED (if configured)
+    const allFeeds = [...RSS_FEEDS];
+    if (GBR_FEED) allFeeds.push(GBR_FEED);
+
+    for (const url of allFeeds) {
+      const isGBR = url === GBR_FEED;
       try {
         const feed = await parser.parseURL(url);
         const feedTitle = feed?.title || url;
@@ -209,13 +215,13 @@ export default async function handler(req, res) {
           const m = {
             id: mid,
             canon,
-            section,
+            section: isGBR ? "GBR Alerts" : section,
             title: title || "(untitled)",
             link,
             source: displaySource(link, feedTitle),
-            matched,
+            matched: isGBR ? ["gbr-alert"] : matched,
             summary: sum,
-            origin: "rss", 
+            origin: isGBR ? "gbr" : "rss",
             published_ts: ts,
             published: new Date(ts * 1000).toISOString()
           };

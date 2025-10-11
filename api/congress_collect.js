@@ -119,7 +119,19 @@ export default async function handler(req, res) {
         found++;
 
         // Build bill URL - use congress.gov public URL (not API URL)
-        const billUrl = `https://www.congress.gov/bill/${congress}th-congress/${type.toLowerCase()}-bill/${number}`;
+        // Map bill types to correct URL format
+        const typeMap = {
+          's': 'senate-bill',
+          'hr': 'house-bill',
+          'sres': 'senate-resolution',
+          'hres': 'house-resolution',
+          'sjres': 'senate-joint-resolution',
+          'hjres': 'house-joint-resolution',
+          'sconres': 'senate-concurrent-resolution',
+          'hconres': 'house-concurrent-resolution'
+        };
+        const urlType = typeMap[type.toLowerCase()] || `${type.toLowerCase()}-bill`;
+        const billUrl = `https://www.congress.gov/bill/${congress}th-congress/${urlType}/${number}`;
         const canon = normalizeUrl(billUrl);
 
         // Check if already seen

@@ -139,11 +139,11 @@
     </div>
   </header>
 
-  <!-- Summary Bar (Today only) -->
+  <!-- Summary Bar (Weekly) -->
   <div class="summary-section">
     <div class="summary-grid" style="grid-template-columns:repeat(3,1fr)">
       <div class="summary-item">
-        <div class="summary-label">Total (Today)</div>
+        <div class="summary-label">Weekly Total</div>
         <div class="summary-value" id="sb-total">—</div>
       </div>
       <div class="summary-item">
@@ -323,16 +323,31 @@
   <script>
   (async function(){
     try{
-      const res = await fetch('/api/summary?window=today', { cache: 'no-store' });
+      // Fetch data from last 7 days
+      const res = await fetch('/api/get_mentions?limit=10000', { cache: 'no-store' });
+      if (!res.ok) throw new Error('HTTP '+res.status);
       const data = await res.json();
-      if (!data?.ok) return;
 
-      const by = (data.totals && data.totals.by_origin) ? data.totals.by_origin : {};
+      // Calculate counts by origin for last 7 days
+      const by = { rss: 0, google_alerts: 0, newsletter: 0, meltwater: 0, other: 0 };
+      const filtered = Array.isArray(data) ? data : [];
+
+      for (const m of filtered) {
+        const origin = (m.origin || "").toLowerCase();
+        if (by.hasOwnProperty(origin)) {
+          by[origin]++;
+        } else {
+          by.other++;
+        }
+      }
+
+      const total = Object.values(by).reduce((a, b) => a + b, 0);
+
       const fmt = (n) => (typeof n === 'number' && Number.isFinite(n) && n.toLocaleString) ? n.toLocaleString() : (n ?? '0');
       const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = fmt(val); };
 
-      setText('sb-total',      data.totals?.all || 0);
-      setText('sb-ga',         by.google_alerts || by.google || 0);
+      setText('sb-total',      total);
+      setText('sb-ga',         by.rss || 0);  // RSS feeds are the Google Alerts
       setText('sb-newsletter', by.newsletter || 0);
 
     } catch(e) {

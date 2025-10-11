@@ -46,23 +46,39 @@ export default async function handler(req, res) {
       const flagged = await redis.smembers(FLAGGED_SET);
 
       // Find and remove the matching one
+      let removed = false;
       for (const item of flagged) {
         try {
           const parsed = JSON.parse(item);
           if (parsed.id === article_id) {
-            await redis.srem(FLAGGED_SET, item);
+            const result = await redis.srem(FLAGGED_SET, item);
+            removed = true;
+            console.log(`Unflagged article ${article_id}, srem result:`, result);
             return res.status(200).json({
               ok: true,
               message: "Article unflagged",
               article_id
             });
           }
-        } catch {}
+        } catch (e) {
+          console.error('Error parsing flagged item:', e);
+        }
       }
+
+      // If we didn't find it, log details for debugging
+      console.log(`Article ${article_id} not found in flagged set. Flagged items:`, flagged.map(item => {
+        try {
+          const parsed = JSON.parse(item);
+          return parsed.id;
+        } catch {
+          return 'parse_error';
+        }
+      }));
 
       return res.status(404).json({
         ok: false,
-        message: "Article not found in flagged list"
+        message: "Article not found in flagged list",
+        article_id
       });
 
     } else if (req.method === "GET") {

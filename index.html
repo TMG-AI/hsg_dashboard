@@ -330,14 +330,17 @@
           // Check if article is flagged
           const isFlagged = flaggedArticles.has(article.id);
 
+          // Store article data on the checkbox element to avoid escaping issues
           div.innerHTML=`
             <div class="card-content">
               <div style="display:flex;align-items:flex-start;margin-bottom:12px">
                 <input type="checkbox"
                        class="flag-checkbox"
                        data-article-id="${article.id}"
+                       data-article-title="${article.title.replace(/"/g, '&quot;')}"
+                       data-article-link="${article.link}"
+                       data-article-source="${article.source}"
                        ${isFlagged ? 'checked' : ''}
-                       onclick="toggleFlag('${article.id}', \`${article.title.replace(/`/g, '')}\`, '${article.link}', '${article.source}', this)"
                        title="Flag for intern summary">
                 <h3 class="card-title" style="flex:1;margin:0"><a href="${article.link}" target="_blank" rel="noopener">${article.title}</a></h3>
               </div>
@@ -346,6 +349,18 @@
               </div>
               ${summary}
             </div>`;
+
+          // Add event listener to checkbox after it's added to DOM
+          const checkbox = div.querySelector('.flag-checkbox');
+          checkbox.addEventListener('click', function() {
+            toggleFlag(
+              this.dataset.articleId,
+              this.dataset.articleTitle,
+              this.dataset.articleLink,
+              this.dataset.articleSource,
+              this
+            );
+          });
           container.appendChild(div);
           resolve();
         }, delay*100);

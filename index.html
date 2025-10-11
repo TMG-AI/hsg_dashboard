@@ -189,14 +189,18 @@
     <!-- AI Chat Interface -->
     <div class="chat-container">
       <div class="chat-header">
-        💬 Ask AI About Articles
+        💬 AI Assistant
+        <span style="font-size:12px;font-weight:400;color:#666;margin-left:auto">Powered by OpenAI</span>
       </div>
       <textarea
         id="chat-input"
         class="chat-input"
         placeholder="Ask questions like: 'What are the main themes?', 'Any Congress bills about trade?', 'Summarize recent news'..."
       ></textarea>
-      <button id="chat-button" class="chat-button" onclick="askAI()">Ask AI</button>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button id="chat-button" class="chat-button" onclick="askAI()" style="flex:1">Ask AI</button>
+        <button id="summarize-button" class="chat-button" onclick="summarizeWeekly()" style="flex:1;background:#5a7c50">Summarize Weekly Articles</button>
+      </div>
       <div id="chat-loading" class="chat-loading">
         <span>🤔 Analyzing articles...</span>
       </div>
@@ -402,6 +406,7 @@
     async function askAI() {
       const input = document.getElementById('chat-input');
       const button = document.getElementById('chat-button');
+      const summarizeButton = document.getElementById('summarize-button');
       const loading = document.getElementById('chat-loading');
       const response = document.getElementById('chat-response');
       const question = input.value.trim();
@@ -413,6 +418,7 @@
 
       // Show loading state
       button.disabled = true;
+      summarizeButton.disabled = true;
       loading.style.display = 'flex';
       response.style.display = 'none';
 
@@ -440,6 +446,55 @@
         response.style.display = 'block';
       } finally {
         button.disabled = false;
+        summarizeButton.disabled = false;
+        loading.style.display = 'none';
+      }
+    }
+
+    // Summarize Weekly Articles function
+    async function summarizeWeekly() {
+      const input = document.getElementById('chat-input');
+      const button = document.getElementById('chat-button');
+      const summarizeButton = document.getElementById('summarize-button');
+      const loading = document.getElementById('chat-loading');
+      const response = document.getElementById('chat-response');
+
+      // Clear input and set default question
+      input.value = '';
+
+      // Show loading state
+      button.disabled = true;
+      summarizeButton.disabled = true;
+      loading.style.display = 'flex';
+      response.style.display = 'none';
+
+      const question = 'Please provide a comprehensive summary of all articles from this week. Include: 1) Main themes and topics, 2) Key developments by category (Google Alerts, Congress, Newsletter), 3) Any notable trends or patterns, 4) Important Congress bills if any.';
+
+      try {
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question })
+        });
+
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`);
+        }
+
+        const data = await res.json();
+
+        if (data.ok) {
+          response.innerHTML = `<strong>Weekly Summary:</strong><br/>${data.answer}<br/><br/><small>Analyzed ${data.articles_analyzed} articles from the past 7 days</small>`;
+          response.style.display = 'block';
+        } else {
+          throw new Error(data.error || 'Unknown error');
+        }
+      } catch (error) {
+        response.innerHTML = `<strong>Error:</strong> ${error.message}`;
+        response.style.display = 'block';
+      } finally {
+        button.disabled = false;
+        summarizeButton.disabled = false;
         loading.style.display = 'none';
       }
     }

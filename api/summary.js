@@ -74,6 +74,15 @@ function detectOrigin(m) {
     return m.origin;
   }
 
+  // Check for GBR indicators
+  if (
+    m?.section === "GBR Alerts" ||
+    (Array.isArray(m?.matched) && m.matched.includes("gbr-alert")) ||
+    (m?.id && m.id.startsWith("gbr_"))
+  ) {
+    return "gbr";
+  }
+
   // Check for Newsletter indicators
   if (
     m?.section === "Newsletter" ||
@@ -83,7 +92,7 @@ function detectOrigin(m) {
     return "newsletter";
   }
 
-  // Check for Meltwater indicators
+  // Check for Meltwater indicators - these should be GBR Meltwater
   const prov = (m?.provider || "").toLowerCase();
   if (
     prov.includes("meltwater") ||
@@ -91,7 +100,7 @@ function detectOrigin(m) {
     (Array.isArray(m?.matched) && m.matched.includes("meltwater-alert")) ||
     (m?.id && m.id.startsWith("mw_stream_"))
   ) {
-    return "meltwater";
+    return "gbr_meltwater";  // Changed from "meltwater" to "gbr_meltwater"
   }
 
   // Check if it's RSS based on host

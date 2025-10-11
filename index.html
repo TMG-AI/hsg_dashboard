@@ -90,6 +90,20 @@
     .refresh-news-btn:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(74,103,65,.3)}
     .refresh-news-btn:disabled{opacity:.6;cursor:not-allowed;transform:none}
     .refresh-news-btn.loading{opacity:.8}
+
+    /* Chat Interface */
+    .chat-container{background:#fff;border-radius:16px;box-shadow:0 4px 20px rgba(0,0,0,.08);border:1px solid rgba(139,195,74,.2);padding:20px;margin-bottom:20px}
+    .chat-header{font-size:18px;font-weight:700;color:#1a1a1a;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+    .chat-input{width:100%;padding:12px;border:1px solid rgba(139,195,74,.3);border-radius:10px;font-size:14px;resize:vertical;min-height:60px}
+    .chat-button{background:#4a6741;color:#fff;border:none;padding:12px 24px;border-radius:10px;font-weight:600;cursor:pointer;transition:.3s;margin-top:8px}
+    .chat-button:hover{background:#5a7c50;transform:translateY(-1px)}
+    .chat-button:disabled{opacity:.6;cursor:not-allowed}
+    .chat-response{background:rgba(139,195,74,.1);border-left:4px solid #4a6741;padding:16px;border-radius:8px;margin-top:16px;line-height:1.6;display:none}
+    .chat-loading{display:none;align-items:center;gap:8px;color:#666;margin-top:12px}
+
+    /* Article Flag Checkbox */
+    .flag-checkbox{position:absolute;top:16px;right:16px;width:24px;height:24px;cursor:pointer;accent-color:#4a6741}
+    .flag-label{position:absolute;top:16px;right:48px;font-size:12px;color:#666;user-select:none}
  /* Base chip style */
 .chip{
   background:linear-gradient(135deg,rgba(139,195,74,.15),rgba(139,195,74,.25));
@@ -172,6 +186,23 @@
   <div id="sent-container"></div>
 </div>
   <div class="wrap">
+    <!-- AI Chat Interface -->
+    <div class="chat-container">
+      <div class="chat-header">
+        💬 Ask AI About Articles
+      </div>
+      <textarea
+        id="chat-input"
+        class="chat-input"
+        placeholder="Ask questions like: 'What are the main themes?', 'Any Congress bills about trade?', 'Summarize recent news'..."
+      ></textarea>
+      <button id="chat-button" class="chat-button" onclick="askAI()">Ask AI</button>
+      <div id="chat-loading" class="chat-loading">
+        <span>🤔 Analyzing articles...</span>
+      </div>
+      <div id="chat-response" class="chat-response"></div>
+    </div>
+
     <div class="controls">
       <label for="search">Search</label>
       <input id="search" placeholder="Filter title…"/>
@@ -242,8 +273,18 @@
             }
           }
           const summary = summaryText ? `<div class="article-summary">${summaryText}</div>` : '';
+
+          // Check if article is flagged
+          const isFlagged = flaggedArticles.has(article.id);
+
           div.innerHTML=`
             <div class="card-content">
+              <input type="checkbox"
+                     class="flag-checkbox"
+                     data-article-id="${article.id}"
+                     ${isFlagged ? 'checked' : ''}
+                     onclick="toggleFlag('${article.id}', \`${article.title.replace(/`/g, '')}\`, '${article.link}', '${article.source}', this)">
+              <label class="flag-label">Flag for intern</label>
               <h3 class="card-title"><a href="${article.link}" target="_blank" rel="noopener">${article.title}</a></h3>
               <div class="meta">
                 <div>${article.source} · ${formatDate(article.published)}</div>
@@ -258,6 +299,7 @@
 
     let currentFilter = 'all';
     let allMentions = [];
+    let flaggedArticles = new Set(); // Track flagged article IDs
 
     async function loadMentions(){
       try{
@@ -356,7 +398,117 @@
       }
     });
 
-    loadMentions();
+    // AI Chat function
+    async function askAI() {
+      const input = document.getElementById('chat-input');
+      const button = document.getElementById('chat-button');
+      const loading = document.getElementById('chat-loading');
+      const response = document.getElementById('chat-response');
+      const question = input.value.trim();
+
+      if (!question) {
+        alert('Please enter a question first');
+        return;
+      }
+
+      // Show loading state
+      button.disabled = true;
+      loading.style.display = 'flex';
+      response.style.display = 'none';
+
+      try {
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question })
+        });
+
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`);
+        }
+
+        const data = await res.json();
+
+        if (data.ok) {
+          response.innerHTML = `<strong>Answer:</strong><br/>${data.answer}<br/><br/><small>Analyzed ${data.articles_analyzed} articles</small>`;
+          response.style.display = 'block';
+        } else {
+          throw new Error(data.error || 'Unknown error');
+        }
+      } catch (error) {
+        response.innerHTML = `<strong>Error:</strong> ${error.message}`;
+        response.style.display = 'block';
+      } finally {
+        button.disabled = false;
+        loading.style.display = 'none';
+      }
+    }
+
+    // Article flagging function
+    async function toggleFlag(articleId, title, link, source, checkbox) {
+      try {
+        if (checkbox.checked) {
+          // Flag the article
+          const res = await fetch('/api/flag_article', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ article_id: articleId, title, link, source })
+          });
+
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const data = await res.json();
+
+          if (data.ok) {
+            flaggedArticles.add(articleId);
+            console.log('Article flagged:', articleId);
+          } else {
+            throw new Error(data.error || 'Failed to flag');
+          }
+        } else {
+          // Unflag the article
+          const res = await fetch('/api/flag_article', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ article_id: articleId })
+          });
+
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const data = await res.json();
+
+          if (data.ok) {
+            flaggedArticles.delete(articleId);
+            console.log('Article unflagged:', articleId);
+          } else {
+            throw new Error(data.error || 'Failed to unflag');
+          }
+        }
+      } catch (error) {
+        console.error('Flag toggle error:', error);
+        // Revert checkbox state on error
+        checkbox.checked = !checkbox.checked;
+        alert(`Error: ${error.message}`);
+      }
+    }
+
+    // Load flagged articles on page load
+    async function loadFlaggedArticles() {
+      try {
+        const res = await fetch('/api/flag_article', { method: 'GET' });
+        if (!res.ok) return;
+
+        const data = await res.json();
+        if (data.ok && data.articles) {
+          data.articles.forEach(article => {
+            flaggedArticles.add(article.id);
+          });
+        }
+      } catch (error) {
+        console.error('Error loading flagged articles:', error);
+      }
+    }
+
+    // Initialize
+    loadFlaggedArticles().then(() => loadMentions());
   </script>
 
   <!-- Summary data loading only -->

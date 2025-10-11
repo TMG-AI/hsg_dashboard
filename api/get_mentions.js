@@ -136,19 +136,23 @@ export default async function handler(req, res) {
     const section = (url.searchParams.get("section") || "").trim();
     const q = (url.searchParams.get("q") || "").toLowerCase().trim();
 
-    // 1. Get ALL data from Redis (including old Meltwater)
+    // 1. Get data from last 7 days from Redis
     let redisItems = [];
     try {
-      const raw = await redis.zrange(ZSET, 0, limit * 2, { rev: true }); // Get more for deduplication
+      const now = Math.floor(Date.now() / 1000);
+      const sevenDaysAgo = now - (7 * 24 * 60 * 60); // 7 days in seconds
+
+      // Use zrangebyscore to get items from last 7 days
+      const raw = await redis.zrangebyscore(ZSET, sevenDaysAgo, now, { rev: true });
       redisItems = raw.map(toObj).filter(Boolean);
-      console.log(`Found ${redisItems.length} items in Redis`);
+      console.log(`Found ${redisItems.length} items from last 7 days in Redis`);
     } catch (redisError) {
       console.error("Redis fetch error:", redisError);
     }
 
     // 2. Use Redis data only (includes real-time streaming Meltwater data)
     // No API calls needed since webhooks provide real-time data
-    console.log('Using all data from Redis (includes real-time streaming Meltwater)');
+    console.log('Using data from last 7 days from Redis');
     let finalItems = redisItems;
 
     // 3. Apply filters

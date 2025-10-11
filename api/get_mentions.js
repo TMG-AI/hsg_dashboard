@@ -144,10 +144,18 @@ export default async function handler(req, res) {
       const now = Math.floor(Date.now() / 1000);
       const sevenDaysAgo = now - (7 * 24 * 60 * 60); // 7 days in seconds
 
+      console.log(`Fetching from Redis: ${sevenDaysAgo} to ${now}`);
+
       // Use zrange with byScore option to get items from last 7 days
       const raw = await redis.zrange(ZSET, sevenDaysAgo, now, { byScore: true, rev: true });
+
+      console.log(`Raw items fetched: ${raw.length}`);
+      console.log(`Raw item type: ${typeof raw[0]}`);
+      console.log(`First raw item sample: ${JSON.stringify(raw[0])?.substring(0, 200)}`);
+
       redisItems = raw.map(toObj).filter(Boolean);
-      console.log(`Found ${redisItems.length} items from last 7 days in Redis`);
+      console.log(`Parsed items: ${redisItems.length}`);
+      console.log(`First parsed item: ${JSON.stringify(redisItems[0])?.substring(0, 200)}`);
     } catch (redisError) {
       console.error("Redis fetch error:", redisError);
     }

@@ -18,7 +18,7 @@ function toObj(x) {
 
 async function getMeltwaterFromAPI() {
   const MELTWATER_API_KEY = process.env.MELTWATER_API_KEY;
-  const SEARCH_ID = '27558498';
+  const SEARCH_ID = '27655196';
   
   if (!MELTWATER_API_KEY) {
     console.log('No Meltwater API key - will use Redis data only');

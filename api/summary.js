@@ -74,6 +74,15 @@ function detectOrigin(m) {
     return m.origin;
   }
 
+  // Check for Newsletter indicators
+  if (
+    m?.section === "Newsletter" ||
+    (Array.isArray(m?.matched) && m.matched.includes("newsletter")) ||
+    (m?.id && m.id.startsWith("newsletter_"))
+  ) {
+    return "newsletter";
+  }
+
   // Check for Meltwater indicators
   const prov = (m?.provider || "").toLowerCase();
   if (
@@ -133,7 +142,7 @@ async function getStreamedMeltwaterCount(window) {
 // Get HISTORICAL count from Meltwater API (with caching to prevent rate limits)
 async function getMeltwaterCountFromAPI(window) {
   const MELTWATER_API_KEY = process.env.MELTWATER_API_KEY;
-  const SEARCH_ID = '27558498';
+  const SEARCH_ID = '27655196';
 
   if (!MELTWATER_API_KEY) {
     console.log('No Meltwater API key - will count from Redis');
@@ -323,7 +332,7 @@ export default async function handler(req, res) {
     });
 
     // Initialize counts
-    const by = { meltwater: 0, google_alerts: 0, rss: 0, reddit: 0, x: 0, other: 0 };
+    const by = { meltwater: 0, google_alerts: 0, rss: 0, newsletter: 0, other: 0 };
     let meltwaterCountFromRedis = 0;
 
     // Count items from Redis by origin (except Meltwater - we'll calculate that separately)

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Coinbase Monitoring Dashboard</title>
+  <title>HSG Dashboard</title>
   <style>
     *{box-sizing:border-box}
     body{
@@ -134,14 +134,14 @@
 
   <header>
     <div class="header-content">
-      <h1 class="header-title">Coinbase Monitoring Dashboard</h1>
-      <p class="header-subtitle">Real-time cryptocurrency mention tracking</p>
+      <h1 class="header-title">HSG Dashboard</h1>
+      <p class="header-subtitle">China media monitoring and analysis</p>
     </div>
   </header>
 
   <!-- Summary Bar (Today only) -->
   <div class="summary-section">
-    <div class="summary-grid">
+    <div class="summary-grid" style="grid-template-columns:repeat(4,1fr)">
       <div class="summary-item">
         <div class="summary-label">Total (Today)</div>
         <div class="summary-value" id="sb-total">—</div>
@@ -155,12 +155,8 @@
         <div class="summary-value" id="sb-mw">—</div>
       </div>
       <div class="summary-item">
-        <div class="summary-label">Reddit</div>
-        <div class="summary-value" id="sb-reddit">—</div>
-      </div>
-      <div class="summary-item">
-        <div class="summary-label">Twitter/X</div>
-        <div class="summary-value" id="sb-x">—</div>
+        <div class="summary-label">Newsletter</div>
+        <div class="summary-value" id="sb-newsletter">—</div>
       </div>
     </div>
   </div>
@@ -339,11 +335,10 @@
       const fmt = (n) => (typeof n === 'number' && Number.isFinite(n) && n.toLocaleString) ? n.toLocaleString() : (n ?? '0');
       const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = fmt(val); };
 
-      setText('sb-total',  data.totals?.all);
-      setText('sb-ga',     by.google_alerts || by.google || 0);
-      setText('sb-mw',     by.meltwater || 0);
-      setText('sb-reddit', by.reddit || 0);
-      setText('sb-x',      by.x || 0);
+      setText('sb-total',      data.totals?.all);
+      setText('sb-ga',         by.google_alerts || by.google || 0);
+      setText('sb-mw',         by.meltwater || 0);
+      setText('sb-newsletter', by.newsletter || 0);
 
     } catch(e) {
       console.error('Error loading summary:', e);
@@ -399,19 +394,6 @@
     // Fallback: run shortly after load if #list is created later
     document.addEventListener('DOMContentLoaded', () => setTimeout(purge, 800));
   }
-})();
-</script>
-  <script>
-(function(){
-  function hideByValueId(id){
-    const v = document.getElementById(id);
-    if (!v) return;
-    // Try to remove the whole summary item if present; else hide the value node
-    const box = v.closest('.summary-item') || v.parentElement;
-    if (box) box.style.display = 'none'; else v.style.display = 'none';
-  }
-  hideByValueId('sb-reddit');
-  hideByValueId('sb-x');
 })();
 </script>
   <script>

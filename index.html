@@ -141,7 +141,7 @@
 
   <!-- Summary Bar (Weekly) -->
   <div class="summary-section">
-    <div class="summary-grid" style="grid-template-columns:repeat(3,1fr)">
+    <div class="summary-grid" style="grid-template-columns:repeat(4,1fr)">
       <div class="summary-item">
         <div class="summary-label">Weekly Total</div>
         <div class="summary-value" id="sb-total">—</div>
@@ -153,6 +153,10 @@
       <div class="summary-item">
         <div class="summary-label">Newsletter</div>
         <div class="summary-value" id="sb-newsletter">—</div>
+      </div>
+      <div class="summary-item">
+        <div class="summary-label">Congress</div>
+        <div class="summary-value" id="sb-congress">—</div>
       </div>
     </div>
   </div>
@@ -329,7 +333,7 @@
       const data = await res.json();
 
       // Calculate counts by origin for last 7 days
-      const by = { rss: 0, google_alerts: 0, newsletter: 0, meltwater: 0, other: 0 };
+      const by = { rss: 0, google_alerts: 0, newsletter: 0, meltwater: 0, congress: 0, other: 0 };
       const filtered = Array.isArray(data) ? data : [];
 
       for (const m of filtered) {
@@ -349,6 +353,7 @@
       setText('sb-total',      total);
       setText('sb-ga',         by.rss || 0);  // RSS feeds are the Google Alerts
       setText('sb-newsletter', by.newsletter || 0);
+      setText('sb-congress',   by.congress || 0);
 
     } catch(e) {
       console.error('Error loading summary:', e);

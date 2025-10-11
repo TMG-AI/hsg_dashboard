@@ -139,20 +139,9 @@
     </div>
   </header>
 
-  <!-- Congress Legislation Card -->
-  <div class="summary-section" style="margin-bottom:16px">
-    <div class="summary-grid" style="grid-template-columns:1fr">
-      <div class="summary-item" style="background:linear-gradient(135deg,#f0f7ff,#e1f0ff);border-color:#2196F3">
-        <div class="summary-label" style="color:#1565C0">Federal Legislation (Congress)</div>
-        <div class="summary-value" style="color:#1565C0" id="sb-congress-highlight">—</div>
-        <div style="font-size:12px;color:#666;margin-top:8px">Bills mentioning China/Chinese in the last 7 days</div>
-      </div>
-    </div>
-  </div>
-
   <!-- Summary Bar (Weekly) -->
   <div class="summary-section">
-    <div class="summary-grid" style="grid-template-columns:repeat(3,1fr)">
+    <div class="summary-grid" style="grid-template-columns:repeat(4,1fr)">
       <div class="summary-item">
         <div class="summary-label">Weekly Total</div>
         <div class="summary-value" id="sb-total">—</div>
@@ -164,6 +153,10 @@
       <div class="summary-item">
         <div class="summary-label">Newsletter</div>
         <div class="summary-value" id="sb-newsletter">—</div>
+      </div>
+      <div class="summary-item">
+        <div class="summary-label">Congress</div>
+        <div class="summary-value" id="sb-congress">—</div>
       </div>
     </div>
   </div>
@@ -357,13 +350,10 @@
       const fmt = (n) => (typeof n === 'number' && Number.isFinite(n) && n.toLocaleString) ? n.toLocaleString() : (n ?? '0');
       const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = fmt(val); };
 
-      // Set Congress highlight card (separate, at top)
-      setText('sb-congress-highlight', by.congress || 0);
-
-      // Set main summary bar (includes Congress in total)
       setText('sb-total',      total);
       setText('sb-ga',         by.rss || 0);  // RSS feeds are the Google Alerts
       setText('sb-newsletter', by.newsletter || 0);
+      setText('sb-congress',   by.congress || 0);
 
     } catch(e) {
       console.error('Error loading summary:', e);

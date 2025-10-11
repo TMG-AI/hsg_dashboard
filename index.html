@@ -248,6 +248,14 @@
   </div>
 
   <script>
+    // XSS Protection: Escape HTML in user-generated content
+    function escapeHtml(text) {
+      if (!text) return '';
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
     let loadingSkeletons = [];
 
     function createLoadingSkeleton(){
@@ -302,7 +310,7 @@
                            ''; // Don't fallback to JSON.stringify
             }
           }
-          const summary = summaryText ? `<div class="article-summary">${summaryText}</div>` : '';
+          const summary = summaryText ? `<div class="article-summary">${escapeHtml(summaryText)}</div>` : '';
 
           // Check if article is flagged
           const isFlagged = flaggedArticles.has(article.id);
@@ -319,7 +327,7 @@
                        data-article-source="${article.source}"
                        ${isFlagged ? 'checked' : ''}
                        title="Flag for intern summary">
-                <h3 class="card-title" style="flex:1;margin:0"><a href="${article.link}" target="_blank" rel="noopener">${article.title}</a></h3>
+                <h3 class="card-title" style="flex:1;margin:0"><a href="${escapeHtml(article.link)}" target="_blank" rel="noopener">${escapeHtml(article.title)}</a></h3>
               </div>
               <div class="meta">
                 <div>${article.source} · ${formatDate(article.published)}</div>
@@ -479,7 +487,7 @@
         const data = await res.json();
 
         if (data.ok) {
-          response.innerHTML = `<strong>Answer:</strong><br/>${data.answer}<br/><br/><small>Analyzed ${data.articles_analyzed} articles</small>`;
+          response.innerHTML = `<strong>Answer:</strong><br/>${escapeHtml(data.answer)}<br/><br/><small>Analyzed ${data.articles_analyzed} articles</small>`;
           response.style.display = 'block';
         } else {
           throw new Error(data.error || 'Unknown error');
@@ -531,7 +539,7 @@
         const data = await res.json();
 
         if (data.ok) {
-          response.innerHTML = `<strong>Weekly Summary:</strong><br/>${data.answer}<br/><br/><small>Analyzed ${data.articles_analyzed} articles from the past 7 days</small>`;
+          response.innerHTML = `<strong>Weekly Summary:</strong><br/>${escapeHtml(data.answer)}<br/><br/><small>Analyzed ${data.articles_analyzed} articles from the past 7 days</small>`;
           response.style.display = 'block';
         } else {
           throw new Error(data.error || 'Unknown error');
@@ -629,12 +637,12 @@ ${articleText}`;
           const otherLines = lines.filter(line => !line.includes('Summary:') && line !== titleLine);
 
           // Reconstruct: Title (bold) + Summary + other content
-          let reconstructed = `<strong>${titleLine}</strong>`;
+          let reconstructed = `<strong>${escapeHtml(titleLine)}</strong>`;
           if (summaryLines.length > 0) {
-            reconstructed += '<br/>' + summaryLines.join('<br/>');
+            reconstructed += '<br/>' + summaryLines.map(l => escapeHtml(l)).join('<br/>');
           }
           if (otherLines.length > 0) {
-            reconstructed += '<br/>' + otherLines.join('<br/>');
+            reconstructed += '<br/>' + otherLines.map(l => escapeHtml(l)).join('<br/>');
           }
 
           currentClientTitle = titleLine;
@@ -1071,9 +1079,9 @@ ${articleText}`;
       div.innerHTML = `
         <div class="card-content">
           <span style="position:absolute;top:10px;right:10px;background:#4caf50;color:white;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600">NEW</span>
-          <h3 class="card-title"><a href="${mention.link}" target="_blank" rel="noopener">${mention.title}</a></h3>
+          <h3 class="card-title"><a href="${escapeHtml(mention.link)}" target="_blank" rel="noopener">${escapeHtml(mention.title)}</a></h3>
           <div class="meta">
-            <div>${mention.source} · Just now</div>
+            <div>${escapeHtml(mention.source)} · Just now</div>
           </div>
           ${chips ? `<div class="chip-container">${chips}</div>` : ''}
         </div>

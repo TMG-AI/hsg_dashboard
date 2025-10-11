@@ -74,15 +74,6 @@ function detectOrigin(m) {
     return m.origin;
   }
 
-  // Check for GBR indicators
-  if (
-    m?.section === "GBR Alerts" ||
-    (Array.isArray(m?.matched) && m.matched.includes("gbr-alert")) ||
-    (m?.id && m.id.startsWith("gbr_"))
-  ) {
-    return "gbr";
-  }
-
   // Check for Newsletter indicators
   if (
     m?.section === "Newsletter" ||
@@ -92,7 +83,7 @@ function detectOrigin(m) {
     return "newsletter";
   }
 
-  // Check for Meltwater indicators - these should be GBR Meltwater
+  // Check for Meltwater indicators
   const prov = (m?.provider || "").toLowerCase();
   if (
     prov.includes("meltwater") ||
@@ -100,7 +91,7 @@ function detectOrigin(m) {
     (Array.isArray(m?.matched) && m.matched.includes("meltwater-alert")) ||
     (m?.id && m.id.startsWith("mw_stream_"))
   ) {
-    return "gbr_meltwater";  // Changed from "meltwater" to "gbr_meltwater"
+    return "meltwater";
   }
 
   // Check if it's RSS based on host
@@ -133,10 +124,11 @@ async function getStreamedMeltwaterCount(window) {
       const dayAgo = now - (24 * 60 * 60);
       
       // Get streamed mentions from the last 24 hours
-      const streamedMentions = await redis.zrangebyscore(
-        STREAM_ZSET, 
-        dayAgo, 
-        now
+      const streamedMentions = await redis.zrange(
+        STREAM_ZSET,
+        dayAgo,
+        now,
+        { byScore: true }
       );
       
       console.log(`Streamed Meltwater count (24h): ${streamedMentions.length}`);
@@ -341,7 +333,7 @@ export default async function handler(req, res) {
     });
 
     // Initialize counts
-    const by = { meltwater: 0, google_alerts: 0, rss: 0, newsletter: 0, gbr: 0, gbr_meltwater: 0, other: 0 };
+    const by = { meltwater: 0, google_alerts: 0, rss: 0, newsletter: 0, other: 0 };
     let meltwaterCountFromRedis = 0;
 
     // Count items from Redis by origin (except Meltwater - we'll calculate that separately)

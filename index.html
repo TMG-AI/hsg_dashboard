@@ -89,11 +89,6 @@
     .refresh-news-btn:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(74,103,65,.3)}
     .refresh-news-btn:disabled{opacity:.6;cursor:not-allowed;transform:none}
     .refresh-news-btn.loading{opacity:.8}
-    .gbr-btn{
-      background:#2e7d32;
-      color:#fff;border:none;padding:10px 20px;border-radius:10px;font-weight:600;cursor:pointer;transition:.3s;font-size:14px;margin-left:12px;text-decoration:none;display:inline-block
-    }
-    .gbr-btn:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(46,125,50,.3)}
  /* Base chip style */
 .chip{
   background:linear-gradient(135deg,rgba(139,195,74,.15),rgba(139,195,74,.25));
@@ -178,7 +173,6 @@
       <button id="refresh-news-btn" class="refresh-news-btn">
         <span id="refresh-btn-text">Get Latest News</span>
       </button>
-      <a href="/gbr.html" class="gbr-btn">GBR Alerts</a>
     </div>
 
     <div id="err"></div>
@@ -273,11 +267,6 @@
 
         // filter + sort newest → oldest
         let filtered = Array.isArray(data) ? data : [];
-        // Exclude GBR articles from main dashboard
-        filtered = filtered.filter(m => {
-          const origin = (m.origin || "").toLowerCase();
-          return origin !== "gbr" && origin !== "gbr_meltwater";
-        });
         if (search) filtered = filtered.filter(m => (m.title||"").toLowerCase().includes(search));
         filtered.sort((a, b) => new Date(b.published) - new Date(a.published));
 
@@ -342,10 +331,7 @@
       const fmt = (n) => (typeof n === 'number' && Number.isFinite(n) && n.toLocaleString) ? n.toLocaleString() : (n ?? '0');
       const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = fmt(val); };
 
-      // Exclude GBR counts from main dashboard total
-      const mainTotal = (data.totals?.all || 0) - (by.gbr || 0) - (by.gbr_meltwater || 0);
-
-      setText('sb-total',      mainTotal);
+      setText('sb-total',      data.totals?.all || 0);
       setText('sb-ga',         by.google_alerts || by.google || 0);
       setText('sb-newsletter', by.newsletter || 0);
 

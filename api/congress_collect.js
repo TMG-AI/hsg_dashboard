@@ -118,8 +118,8 @@ export default async function handler(req, res) {
 
         found++;
 
-        // Build bill URL
-        const billUrl = bill.url || `https://www.congress.gov/bill/${congress}th-congress/${type.toLowerCase()}-bill/${number}`;
+        // Build bill URL - use congress.gov public URL (not API URL)
+        const billUrl = `https://www.congress.gov/bill/${congress}th-congress/${type.toLowerCase()}-bill/${number}`;
         const canon = normalizeUrl(billUrl);
 
         // Check if already seen

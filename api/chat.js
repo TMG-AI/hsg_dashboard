@@ -50,6 +50,13 @@ export default async function handler(req, res) {
       summary: a.summary?.substring(0, 200) // Limit summary length
     }));
 
+    // Count articles by origin
+    const originCounts = articles.reduce((acc, a) => {
+      const origin = a.origin || 'unknown';
+      acc[origin] = (acc[origin] || 0) + 1;
+      return acc;
+    }, {});
+
     // Create OpenAI chat completion
     const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -62,9 +69,15 @@ export default async function handler(req, res) {
         messages: [
           {
             role: 'system',
-            content: `You are an expert analyst helping with China media monitoring. You have access to ${articles.length} recent articles about China from the past 7 days. Articles include Google Alerts, Congress bills, and newsletters.
+            content: `You are an expert analyst helping with China media monitoring. You have access to ${articles.length} recent articles about China from the past 7 days.
 
-Answer questions about trends, key topics, sentiment, or specific articles. Be concise and cite specific article titles when relevant.
+Article breakdown by source:
+- Google Alerts: ${originCounts.google_alerts || 0} articles
+- Congress Bills: ${originCounts.congress || 0} bills
+- Newsletters: ${originCounts.newsletter || 0} articles
+${originCounts.newsletter ? '' : '\nNote: There are NO newsletter articles in this dataset - do not mention newsletters in your response.'}
+
+Answer questions about trends, key topics, sentiment, or specific articles. Be concise and cite specific article titles when relevant. ONLY discuss sources that have articles available (non-zero count).
 
 Available articles:
 ${JSON.stringify(articleContext, null, 2)}`

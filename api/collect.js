@@ -38,7 +38,8 @@ const SEEN_LINK = "mentions:seen:canon";
 const MAX_MENTIONS = 5000;
 
 // ---- config ----
-const RSS_FEEDS = (process.env.RSS_FEEDS || "").split(",").map(s => s.trim()).filter(Boolean);
+// Support both comma and semicolon delimiters for RSS_FEEDS
+const RSS_FEEDS = (process.env.RSS_FEEDS || "").split(/[,;]/).map(s => s.trim()).filter(Boolean);
 const KEYWORDS  = (process.env.KEYWORDS  || "").split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
 const URGENT    = (process.env.ALERT_KEYWORDS_URGENT || "").split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
 
@@ -175,22 +176,8 @@ export default async function handler(req, res) {
       return;
     }
 
-    if (!KEYWORDS.length) {
-      console.log('KEYWORDS not configured - skipping RSS collection');
-      res.status(200).json({
-        ok: true,
-        message: "RSS collection disabled - no keywords configured",
-        found: 0,
-        stored: 0,
-        emailed: 0,
-        errors: [],
-        keywords_disabled: true,
-        generated_at: new Date().toISOString()
-      });
-      return;
-    }
-
-    console.log(`RSS collection starting: ${RSS_FEEDS.length} feeds, ${KEYWORDS.length} keywords`);
+    // No keyword filtering - collect all articles
+    console.log(`RSS collection starting: ${RSS_FEEDS.length} feeds, no keyword filtering`);
 
     for (const url of RSS_FEEDS) {
       try {
@@ -203,11 +190,9 @@ export default async function handler(req, res) {
           const sum = ytDesc || e.contentSnippet || e.content || e.summary || "";
           const link = extractItemLink(e);
 
-          let matched = matchKeywords(`${title}\n${sum}\n${feedTitle}\n${link}`);
-          const isYT = /youtube\.com|youtu\.be/.test((new URL(link)).hostname);
-          const isOfficialYT = isYT && /coinbase|^base\b|build on base/i.test(feedTitle || "");
-          if (!matched.length && isOfficialYT) matched = ["coinbase"];
-          if (!matched.length) continue;
+          // No keyword filtering - accept all articles
+          let matched = KEYWORDS.length > 0 ? matchKeywords(`${title}\n${sum}\n${feedTitle}\n${link}`) : ["google-alert"];
+          if (!matched.length) matched = ["google-alert"]; // Always include
 
           const canon = normalizeUrl(link || title);
           if (!canon) continue;
@@ -230,7 +215,7 @@ export default async function handler(req, res) {
             source: displaySource(link, feedTitle),
             matched,
             summary: sum,
-            origin: "google_alerts", 
+            origin: "rss", 
             published_ts: ts,
             published: new Date(ts * 1000).toISOString()
           };

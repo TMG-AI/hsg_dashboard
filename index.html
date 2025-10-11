@@ -35,9 +35,10 @@
     }
     .summary-item{
       background:#fff;border-radius:16px;padding:24px;box-shadow:0 4px 20px rgba(0,0,0,.08);
-      border:1px solid rgba(139,195,74,.2);transition:.3s;text-align:center
+      border:1px solid rgba(139,195,74,.2);transition:.3s;text-align:center;cursor:pointer
     }
     .summary-item:hover{transform:translateY(-2px);box-shadow:0 8px 30px rgba(0,0,0,.12);border-color:rgba(139,195,74,.4)}
+    .summary-item.active{border:2px solid #4a6741;background:rgba(139,195,74,.1)}
     .summary-label{color:#333;font-size:16px;font-weight:700;margin-bottom:16px;text-transform:uppercase;letter-spacing:.8px;min-height:40px;display:flex;align-items:flex-end;justify-content:center}
     .summary-value{font-size:32px;font-weight:700;color:#4a6741;margin:0}
 
@@ -142,19 +143,19 @@
   <!-- Summary Bar (Weekly) -->
   <div class="summary-section">
     <div class="summary-grid" style="grid-template-columns:repeat(4,1fr)">
-      <div class="summary-item">
+      <div class="summary-item active" data-filter="all" onclick="filterByOrigin('all')">
         <div class="summary-label">Weekly Total</div>
         <div class="summary-value" id="sb-total">—</div>
       </div>
-      <div class="summary-item">
+      <div class="summary-item" data-filter="google_alerts" onclick="filterByOrigin('google_alerts')">
         <div class="summary-label">Google Alerts</div>
         <div class="summary-value" id="sb-ga">—</div>
       </div>
-      <div class="summary-item">
+      <div class="summary-item" data-filter="newsletter" onclick="filterByOrigin('newsletter')">
         <div class="summary-label">Newsletter</div>
         <div class="summary-value" id="sb-newsletter">—</div>
       </div>
-      <div class="summary-item">
+      <div class="summary-item" data-filter="congress" onclick="filterByOrigin('congress')">
         <div class="summary-label">Congress</div>
         <div class="summary-value" id="sb-congress">—</div>
       </div>
@@ -255,6 +256,9 @@
       });
     }
 
+    let currentFilter = 'all';
+    let allMentions = [];
+
     async function loadMentions(){
       try{
         document.getElementById('err').style.display='none';
@@ -269,10 +273,29 @@
         if (!r.ok) throw new Error('HTTP '+r.status);
         const data=await r.json();
 
-        // filter + sort newest → oldest
-        let filtered = Array.isArray(data) ? data : [];
+        // Store all mentions for filtering
+        allMentions = Array.isArray(data) ? data : [];
+
+        // Apply current filter
+        let filtered = allMentions;
+        if (currentFilter !== 'all') {
+          filtered = filtered.filter(m => (m.origin || '').toLowerCase() === currentFilter);
+        }
+
+        // Apply search filter
         if (search) filtered = filtered.filter(m => (m.title||"").toLowerCase().includes(search));
-        filtered.sort((a, b) => new Date(b.published) - new Date(a.published));
+
+        // Sort: Congress first, then by date (newest first)
+        filtered.sort((a, b) => {
+          const aIsCongress = (a.origin || '').toLowerCase() === 'congress';
+          const bIsCongress = (b.origin || '').toLowerCase() === 'congress';
+
+          if (aIsCongress && !bIsCongress) return -1;  // a (Congress) comes first
+          if (!aIsCongress && bIsCongress) return 1;   // b (Congress) comes first
+
+          // Both same type - sort by date (newest first)
+          return new Date(b.published) - new Date(a.published);
+        });
 
         removeLoadingSkeletons();
 
@@ -299,6 +322,19 @@
         el.textContent='Could not load mentions. '+e.message;
         console.error('Error loading mentions:', e);
       }
+    }
+
+    function filterByOrigin(origin){
+      currentFilter = origin;
+
+      // Update active state on summary items
+      document.querySelectorAll('.summary-item').forEach(item => {
+        item.classList.remove('active');
+      });
+      document.querySelector(`[data-filter="${origin}"]`).classList.add('active');
+
+      // Reload with filter
+      loadMentions();
     }
 
     document.getElementById('search').addEventListener('input', ()=>{

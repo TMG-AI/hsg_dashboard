@@ -612,15 +612,35 @@ ${articleText}`;
         const data = await res.json();
 
         if (data.ok) {
-          // Extract title from AI response (first line before "Summary:")
-          const lines = data.answer.split('\n');
+          // Extract and format the response
+          let formattedAnswer = data.answer;
+
+          // Remove brackets around title if present
+          formattedAnswer = formattedAnswer.replace(/^\[([^\]]+)\]/, '$1');
+
+          // Split into lines
+          const lines = formattedAnswer.split('\n').filter(line => line.trim());
+
+          // First line should be the title
           const titleLine = lines[0].trim();
-          const summaryStartIndex = data.answer.indexOf('Summary:');
+
+          // Find the summary part (starts with "Summary:")
+          const summaryLines = lines.filter(line => line.includes('Summary:'));
+          const otherLines = lines.filter(line => !line.includes('Summary:') && line !== titleLine);
+
+          // Reconstruct: Title (bold) + Summary + other content
+          let reconstructed = `<strong>${titleLine}</strong>`;
+          if (summaryLines.length > 0) {
+            reconstructed += '<br/>' + summaryLines.join('<br/>');
+          }
+          if (otherLines.length > 0) {
+            reconstructed += '<br/>' + otherLines.join('<br/>');
+          }
 
           currentClientTitle = titleLine;
-          currentClientSummary = data.answer;
+          currentClientSummary = formattedAnswer;
 
-          response.innerHTML = `<strong>Client Summary:</strong><br/><br/>${data.answer.replace(/\n/g, '<br/>')}`;
+          response.innerHTML = `<strong>Client Summary:</strong><br/><br/>${reconstructed}`;
           response.style.display = 'block';
           saveSection.style.display = 'block';
         } else {

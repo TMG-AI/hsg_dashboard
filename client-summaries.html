@@ -98,10 +98,33 @@
             hour12: true
           });
 
+          // Format the summary text
+          let formattedSummary = summary.summary;
+
+          // Remove brackets around title
+          formattedSummary = formattedSummary.replace(/^\[([^\]]+)\]/, '$1');
+
+          // Split into lines
+          const lines = formattedSummary.split('\n').filter(line => line.trim());
+
+          // Extract title (first line)
+          const titleLine = lines[0].trim();
+
+          // Get summary content (lines with "Summary:")
+          const summaryContent = lines.filter(line => line.includes('Summary:')).join('\n');
+
+          // Remove duplicate title if it appears again
+          const cleanedLines = lines.filter((line, index) => {
+            if (index === 0) return false; // Skip first line (title)
+            if (line.trim() === titleLine) return false; // Skip duplicate title
+            if (line.includes('Summary:')) return true; // Keep summary
+            return line.length > 10; // Keep other substantial content
+          });
+
           return `
             <div class="summary-card" data-id="${summary.id}">
-              <h3 class="summary-title">${summary.title}</h3>
-              <div class="summary-text">${summary.summary}</div>
+              <h3 class="summary-title">${titleLine}</h3>
+              <div class="summary-text">${cleanedLines.join('\n')}</div>
               <div class="summary-meta">
                 <span>Created: ${date}</span>
                 <div>

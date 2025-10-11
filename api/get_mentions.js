@@ -12,7 +12,9 @@ const ZSET = "mentions:z";
 function toObj(x) {
   if (!x) return null;
   if (typeof x === "object" && x.id) return x;
-  try { return JSON.parse(typeof x === "string" ? x : x.toString("utf-8")); }
+  try {
+    return JSON.parse(x);
+  }
   catch { return null; }
 }
 

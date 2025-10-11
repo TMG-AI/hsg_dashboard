@@ -1,5 +1,5 @@
 import { Redis } from "@upstash/redis";
-const redis = new Redis({ url: process.env.KV_REST_API_URL, token: process.env.KV_REST_API_TOKEN });
+const redis = new Redis({ url: process.env.STORAGE_KV_REST_API_URL, token: process.env.STORAGE_KV_REST_API_TOKEN });
 
 const SEEN_ID   = "mentions:seen";
 const SEEN_LINK = "mentions:seen:canon";

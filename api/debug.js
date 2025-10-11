@@ -58,8 +58,8 @@ export default async function handler(req, res) {
         rss_feeds: !!process.env.RSS_FEEDS,
         storage_kv_url: !!process.env.STORAGE_KV_REST_API_URL,
         storage_kv_token: !!process.env.STORAGE_KV_REST_API_TOKEN,
-        old_kv_url_exists: !!process.env.KV_REST_API_URL,
-        old_kv_token_exists: !!process.env.KV_REST_API_TOKEN
+        old_kv_url_exists: !!process.env.STORAGE_KV_REST_API_URL,
+        old_kv_token_exists: !!process.env.STORAGE_KV_REST_API_TOKEN
       }
     });
   } catch (e) {

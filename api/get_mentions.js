@@ -147,7 +147,7 @@ export default async function handler(req, res) {
       console.log(`Fetching from Redis: ${sevenDaysAgo} to ${now}`);
 
       // Use zrange with byScore option to get items from last 7 days
-      const raw = await redis.zrange(ZSET, sevenDaysAgo, now, { byScore: true, rev: true });
+      const raw = await redis.zrange(ZSET, sevenDaysAgo, now, { byScore: true });
 
       console.log(`Raw items fetched: ${raw.length}`);
       console.log(`Raw item type: ${typeof raw[0]}`);
@@ -180,11 +180,11 @@ export default async function handler(req, res) {
       );
     }
 
-    // 4. Sort by date (newest first)
+    // 4. Sort by date (newest first) - fix sort order
     finalItems.sort((a, b) => {
-      const tsA = b.published_ts || 0;
-      const tsB = a.published_ts || 0;
-      return tsA - tsB;
+      const tsA = a.published_ts || 0;
+      const tsB = b.published_ts || 0;
+      return tsB - tsA;  // Newest first
     });
 
     // 5. Apply limit and clean up response

@@ -206,35 +206,12 @@
       <textarea
         id="chat-input"
         class="chat-input"
-        placeholder="Ask questions like: 'What are the main themes?', 'Any Congress bills about trade?', 'Summarize recent news'..."
+        placeholder="Ask questions, paste full article for client summary, or click 'Summarize Weekly Articles'..."
       ></textarea>
       <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
         <button id="chat-button" class="chat-button" onclick="askAI()" style="flex:1;min-width:150px">Ask AI</button>
         <button id="summarize-button" class="chat-button" onclick="summarizeWeekly()" style="flex:1;background:#5a7c50;min-width:150px">Summarize Weekly Articles</button>
-        <button id="client-summary-button" class="chat-button" onclick="toggleClientSummary()" style="flex:1;background:#6b8e5f;min-width:150px">Client Summary</button>
-      </div>
-
-      <!-- Client Summary Section (hidden by default) -->
-      <div id="client-summary-section" style="display:none;margin-top:16px">
-        <div style="margin-bottom:8px;color:#666;font-size:14px">
-          Paste the full article text below. AI will create a professional 2-4 sentence summary following your client report format.
-        </div>
-        <input
-          id="article-title-input"
-          type="text"
-          placeholder="Article Title"
-          style="width:100%;padding:10px;border:1px solid rgba(139,195,74,.3);border-radius:10px;font-size:14px;margin-bottom:8px"
-        />
-        <textarea
-          id="article-text-input"
-          class="chat-input"
-          placeholder="Paste full article text here..."
-          style="min-height:150px"
-        ></textarea>
-        <div style="display:flex;gap:8px;margin-top:8px">
-          <button onclick="generateClientSummary()" class="chat-button" style="flex:1">Generate Summary</button>
-          <button onclick="toggleClientSummary()" class="chat-button" style="background:#999">Cancel</button>
-        </div>
+        <button id="client-summary-button" class="chat-button" onclick="generateClientSummary()" style="flex:1;background:#6b8e5f;min-width:150px">Client Summary</button>
       </div>
 
       <div id="chat-loading" class="chat-loading">
@@ -570,30 +547,13 @@
       }
     }
 
-    // Toggle Client Summary Section
+    // Client Summary variables
     let currentClientSummary = null;
     let currentClientTitle = null;
 
-    function toggleClientSummary() {
-      const section = document.getElementById('client-summary-section');
-      const response = document.getElementById('chat-response');
-      const saveSection = document.getElementById('save-summary-section');
-
-      if (section.style.display === 'none') {
-        section.style.display = 'block';
-        response.style.display = 'none';
-        saveSection.style.display = 'none';
-        document.getElementById('article-title-input').value = '';
-        document.getElementById('article-text-input').value = '';
-      } else {
-        section.style.display = 'none';
-      }
-    }
-
     // Generate Client Summary
     async function generateClientSummary() {
-      const title = document.getElementById('article-title-input').value.trim();
-      const articleText = document.getElementById('article-text-input').value.trim();
+      const articleText = document.getElementById('chat-input').value.trim();
       const button = document.getElementById('chat-button');
       const summarizeButton = document.getElementById('summarize-button');
       const clientSummaryButton = document.getElementById('client-summary-button');
@@ -601,15 +561,13 @@
       const response = document.getElementById('chat-response');
       const saveSection = document.getElementById('save-summary-section');
 
-      if (!title) {
-        alert('Please enter an article title');
+      if (!articleText) {
+        alert('Please paste the full article text (including headline) in the chat box above');
         return;
       }
 
-      if (!articleText) {
-        alert('Please paste the article text');
-        return;
-      }
+      // Clear input
+      document.getElementById('chat-input').value = '';
 
       // Show loading state
       button.disabled = true;
@@ -619,13 +577,14 @@
       response.style.display = 'none';
       saveSection.style.display = 'none';
 
-      const prompt = `Create a professional client summary for the following article. Follow this exact format:
+      const prompt = `Create a professional client summary for the following article. The article text includes the headline. Follow this exact format:
 
 [Article Title]
 Summary: [2-4 sentences covering the key points]
 
 Guidelines:
-- Start with "Summary: "
+- Extract the article title from the first line or headline of the pasted text
+- Start the summary with "Summary: "
 - Write 2-4 sentences (typically 3-4)
 - Use professional, factual, neutral tone
 - First sentence: What happened/was announced and when (include specific date if mentioned)
@@ -636,9 +595,7 @@ Guidelines:
 - Include relevant policy/legislative details
 - Note reactions from stakeholders when significant
 
-Article Title: ${title}
-
-Full Article Text:
+Full Article Text (including headline):
 ${articleText}`;
 
       try {
@@ -655,15 +612,17 @@ ${articleText}`;
         const data = await res.json();
 
         if (data.ok) {
+          // Extract title from AI response (first line before "Summary:")
+          const lines = data.answer.split('\n');
+          const titleLine = lines[0].trim();
+          const summaryStartIndex = data.answer.indexOf('Summary:');
+
+          currentClientTitle = titleLine;
           currentClientSummary = data.answer;
-          currentClientTitle = title;
 
           response.innerHTML = `<strong>Client Summary:</strong><br/><br/>${data.answer.replace(/\n/g, '<br/>')}`;
           response.style.display = 'block';
           saveSection.style.display = 'block';
-
-          // Hide the input section
-          document.getElementById('client-summary-section').style.display = 'none';
         } else {
           throw new Error(data.error || 'Unknown error');
         }

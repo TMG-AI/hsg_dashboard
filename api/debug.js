@@ -29,16 +29,13 @@ export default async function handler(req, res) {
     const sevenDaysAgo = now - (7 * 24 * 60 * 60);
     const last7Days = await redis.zrange(ZSET, sevenDaysAgo, now, { byScore: true });
 
-    const by = { rss: 0, google_alerts: 0, newsletter: 0, meltwater: 0, congress: 0, other: 0 };
+    const by = {};
     for (const item of last7Days) {
       try {
         const parsed = JSON.parse(item);
-        const origin = (parsed.origin || "").toLowerCase();
-        if (by.hasOwnProperty(origin)) {
-          by[origin]++;
-        } else {
-          by.other++;
-        }
+        const origin = (parsed.origin || "other").toLowerCase();
+        if (!by[origin]) by[origin] = 0;
+        by[origin]++;
       } catch {}
     }
 

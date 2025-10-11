@@ -208,14 +208,46 @@
         class="chat-input"
         placeholder="Ask questions like: 'What are the main themes?', 'Any Congress bills about trade?', 'Summarize recent news'..."
       ></textarea>
-      <div style="display:flex;gap:8px;margin-top:8px">
-        <button id="chat-button" class="chat-button" onclick="askAI()" style="flex:1">Ask AI</button>
-        <button id="summarize-button" class="chat-button" onclick="summarizeWeekly()" style="flex:1;background:#5a7c50">Summarize Weekly Articles</button>
+      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+        <button id="chat-button" class="chat-button" onclick="askAI()" style="flex:1;min-width:150px">Ask AI</button>
+        <button id="summarize-button" class="chat-button" onclick="summarizeWeekly()" style="flex:1;background:#5a7c50;min-width:150px">Summarize Weekly Articles</button>
+        <button id="client-summary-button" class="chat-button" onclick="toggleClientSummary()" style="flex:1;background:#6b8e5f;min-width:150px">Client Summary</button>
       </div>
+
+      <!-- Client Summary Section (hidden by default) -->
+      <div id="client-summary-section" style="display:none;margin-top:16px">
+        <div style="margin-bottom:8px;color:#666;font-size:14px">
+          Paste the full article text below. AI will create a professional 2-4 sentence summary following your client report format.
+        </div>
+        <input
+          id="article-title-input"
+          type="text"
+          placeholder="Article Title"
+          style="width:100%;padding:10px;border:1px solid rgba(139,195,74,.3);border-radius:10px;font-size:14px;margin-bottom:8px"
+        />
+        <textarea
+          id="article-text-input"
+          class="chat-input"
+          placeholder="Paste full article text here..."
+          style="min-height:150px"
+        ></textarea>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button onclick="generateClientSummary()" class="chat-button" style="flex:1">Generate Summary</button>
+          <button onclick="toggleClientSummary()" class="chat-button" style="background:#999">Cancel</button>
+        </div>
+      </div>
+
       <div id="chat-loading" class="chat-loading">
         <span>🤔 Analyzing articles...</span>
       </div>
       <div id="chat-response" class="chat-response"></div>
+
+      <!-- Save to Client Summaries Button (hidden by default) -->
+      <div id="save-summary-section" style="display:none;margin-top:12px">
+        <button onclick="saveToClientSummaries()" class="chat-button" style="background:#4a6741;width:100%">
+          💾 Save to Client Summaries Page
+        </button>
+      </div>
     </div>
 
     <div class="controls">
@@ -226,6 +258,9 @@
       </button>
       <button id="flagged-articles-btn" class="refresh-news-btn" onclick="showFlaggedArticles()">
         <span>Flagged Articles (<span id="flagged-count">0</span>)</span>
+      </button>
+      <button class="refresh-news-btn" onclick="window.location.href='/client-summaries.html'">
+        <span>📋 Client Summaries</span>
       </button>
     </div>
 
@@ -472,15 +507,19 @@
       const input = document.getElementById('chat-input');
       const button = document.getElementById('chat-button');
       const summarizeButton = document.getElementById('summarize-button');
+      const clientSummaryButton = document.getElementById('client-summary-button');
       const loading = document.getElementById('chat-loading');
       const response = document.getElementById('chat-response');
+      const saveSection = document.getElementById('save-summary-section');
 
       // Clear input and set default question
       input.value = '';
+      saveSection.style.display = 'none';
 
       // Show loading state
       button.disabled = true;
       summarizeButton.disabled = true;
+      clientSummaryButton.disabled = true;
       loading.style.display = 'flex';
       response.style.display = 'none';
 
@@ -511,7 +550,151 @@
       } finally {
         button.disabled = false;
         summarizeButton.disabled = false;
+        clientSummaryButton.disabled = false;
         loading.style.display = 'none';
+      }
+    }
+
+    // Toggle Client Summary Section
+    let currentClientSummary = null;
+    let currentClientTitle = null;
+
+    function toggleClientSummary() {
+      const section = document.getElementById('client-summary-section');
+      const response = document.getElementById('chat-response');
+      const saveSection = document.getElementById('save-summary-section');
+
+      if (section.style.display === 'none') {
+        section.style.display = 'block';
+        response.style.display = 'none';
+        saveSection.style.display = 'none';
+        document.getElementById('article-title-input').value = '';
+        document.getElementById('article-text-input').value = '';
+      } else {
+        section.style.display = 'none';
+      }
+    }
+
+    // Generate Client Summary
+    async function generateClientSummary() {
+      const title = document.getElementById('article-title-input').value.trim();
+      const articleText = document.getElementById('article-text-input').value.trim();
+      const button = document.getElementById('chat-button');
+      const summarizeButton = document.getElementById('summarize-button');
+      const clientSummaryButton = document.getElementById('client-summary-button');
+      const loading = document.getElementById('chat-loading');
+      const response = document.getElementById('chat-response');
+      const saveSection = document.getElementById('save-summary-section');
+
+      if (!title) {
+        alert('Please enter an article title');
+        return;
+      }
+
+      if (!articleText) {
+        alert('Please paste the article text');
+        return;
+      }
+
+      // Show loading state
+      button.disabled = true;
+      summarizeButton.disabled = true;
+      clientSummaryButton.disabled = true;
+      loading.style.display = 'flex';
+      response.style.display = 'none';
+      saveSection.style.display = 'none';
+
+      const prompt = `Create a professional client summary for the following article. Follow this exact format:
+
+[Article Title]
+Summary: [2-4 sentences covering the key points]
+
+Guidelines:
+- Start with "Summary: "
+- Write 2-4 sentences (typically 3-4)
+- Use professional, factual, neutral tone
+- First sentence: What happened/was announced and when (include specific date if mentioned)
+- Middle sentences: Key details, context, implications
+- Last sentence (if needed): Additional context or reactions
+- Include specific names, titles, roles when mentioned
+- Focus on actionable facts and key developments
+- Include relevant policy/legislative details
+- Note reactions from stakeholders when significant
+
+Article Title: ${title}
+
+Full Article Text:
+${articleText}`;
+
+      try {
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question: prompt })
+        });
+
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`);
+        }
+
+        const data = await res.json();
+
+        if (data.ok) {
+          currentClientSummary = data.answer;
+          currentClientTitle = title;
+
+          response.innerHTML = `<strong>Client Summary:</strong><br/><br/>${data.answer.replace(/\n/g, '<br/>')}`;
+          response.style.display = 'block';
+          saveSection.style.display = 'block';
+
+          // Hide the input section
+          document.getElementById('client-summary-section').style.display = 'none';
+        } else {
+          throw new Error(data.error || 'Unknown error');
+        }
+      } catch (error) {
+        response.innerHTML = `<strong>Error:</strong> ${error.message}`;
+        response.style.display = 'block';
+      } finally {
+        button.disabled = false;
+        summarizeButton.disabled = false;
+        clientSummaryButton.disabled = false;
+        loading.style.display = 'none';
+      }
+    }
+
+    // Save to Client Summaries Page
+    async function saveToClientSummaries() {
+      if (!currentClientSummary || !currentClientTitle) {
+        alert('No summary to save');
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/client_summaries', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: currentClientTitle,
+            summary: currentClientSummary,
+            created_at: new Date().toISOString()
+          })
+        });
+
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`);
+        }
+
+        const data = await res.json();
+
+        if (data.ok) {
+          alert('Summary saved to Client Summaries page!');
+          document.getElementById('save-summary-section').style.display = 'none';
+        } else {
+          throw new Error(data.error || 'Failed to save');
+        }
+      } catch (error) {
+        alert(`Error saving summary: ${error.message}`);
       }
     }
 

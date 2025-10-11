@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Client Summaries - HSG Dashboard</title>
+  <style>
+    *{box-sizing:border-box}
+    body{
+      font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;
+      margin:0;
+      background:linear-gradient(135deg,#f8fffe 0%,#f1f8f6 100%);
+      min-height:100vh;color:#1a1a1a
+    }
+    header{
+      background:linear-gradient(135deg,#4a6741 0%,#5a7c50 100%);
+      color:#fff;padding:24px 32px;box-shadow:0 4px 20px rgba(74,103,65,.15);
+      position:relative;overflow:hidden
+    }
+    header::before{
+      content:'';position:absolute;inset:0;
+      background:url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M 10 0 L 0 0 0 10" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="0.5"/></pattern></defs><rect width="100" height="100" fill="url(%23grid)"/></svg>')
+    }
+    .header-content{position:relative;z-index:1;display:flex;align-items:center;justify-content:space-between}
+    .header-title{margin:0;font-size:28px;font-weight:600;letter-spacing:-.02em}
+    .back-btn{background:rgba(255,255,255,.2);color:#fff;border:none;padding:10px 20px;border-radius:10px;font-weight:600;cursor:pointer;transition:.3s;text-decoration:none;display:inline-block}
+    .back-btn:hover{background:rgba(255,255,255,.3);transform:translateY(-1px)}
+
+    .wrap{max-width:1200px;margin:0 auto;padding:32px 24px}
+    .summary-card{background:#fff;border-radius:16px;box-shadow:0 4px 20px rgba(0,0,0,.08);padding:24px;margin-bottom:20px;border:1px solid rgba(139,195,74,.2);transition:.3s;position:relative}
+    .summary-card:hover{transform:translateY(-2px);box-shadow:0 8px 30px rgba(0,0,0,.12)}
+    .summary-card::before{content:'';position:absolute;top:0;left:0;width:100%;height:4px;background:linear-gradient(90deg,#8bc34a,#7cb342);border-radius:16px 16px 0 0}
+    .summary-title{font-size:20px;font-weight:700;color:#1a1a1a;margin:0 0 16px 0;line-height:1.4}
+    .summary-text{color:#333;font-size:15px;line-height:1.7;white-space:pre-wrap}
+    .summary-meta{color:#666;font-size:13px;margin-top:16px;padding-top:16px;border-top:1px solid rgba(139,195,74,.2);display:flex;align-items:center;justify-content:space-between}
+    .delete-btn{background:#d32f2f;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;transition:.3s}
+    .delete-btn:hover{background:#c62828;transform:translateY(-1px)}
+    .copy-btn{background:#4a6741;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;transition:.3s;margin-right:8px}
+    .copy-btn:hover{background:#5a7c50;transform:translateY(-1px)}
+
+    .empty-state{text-align:center;padding:60px 20px;color:#666;background:#fff;border-radius:16px;border:1px solid rgba(139,195,74,.2)}
+    .empty-state-icon{font-size:48px;margin-bottom:16px;opacity:.5}
+    .loading{display:flex;align-items:center;justify-content:center;padding:40px;color:#666}
+    .loading::before{content:'';width:20px;height:20px;border:2px solid rgba(139,195,74,.3);border-top:2px solid #8bc34a;border-radius:50%;animation:spin 1s linear infinite;margin-right:12px}
+    @keyframes spin{0%{transform:rotate(0)}100%{transform:rotate(360deg)}}
+
+    .section-title{font-size:24px;font-weight:700;color:#1a1a1a;margin:0 0 24px 0;display:flex;align-items:center;gap:12px}
+    .section-title::before{content:'';width:4px;height:24px;background:linear-gradient(135deg,#8bc34a,#7cb342);border-radius:2px}
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="header-content">
+      <h1 class="header-title">📋 Client Summaries</h1>
+      <a href="/" class="back-btn">← Back to Dashboard</a>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <h2 class="section-title">Saved Client Summaries</h2>
+    <div id="loading" class="loading">Loading summaries...</div>
+    <div id="summaries-container"></div>
+  </div>
+
+  <script>
+    async function loadSummaries() {
+      const loading = document.getElementById('loading');
+      const container = document.getElementById('summaries-container');
+
+      try {
+        loading.style.display = 'flex';
+
+        const res = await fetch('/api/client_summaries', { method: 'GET' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        const data = await res.json();
+
+        loading.style.display = 'none';
+
+        if (!data.summaries || data.summaries.length === 0) {
+          container.innerHTML = `
+            <div class="empty-state">
+              <div class="empty-state-icon">📄</div>
+              <h3>No client summaries yet</h3>
+              <p>Use the "Client Summary" button on the main dashboard to create summaries.</p>
+            </div>`;
+          return;
+        }
+
+        container.innerHTML = data.summaries.map(summary => {
+          const date = new Date(summary.created_at).toLocaleString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true
+          });
+
+          return `
+            <div class="summary-card" data-id="${summary.id}">
+              <h3 class="summary-title">${summary.title}</h3>
+              <div class="summary-text">${summary.summary}</div>
+              <div class="summary-meta">
+                <span>Created: ${date}</span>
+                <div>
+                  <button class="copy-btn" onclick="copySummary('${summary.id}')">📋 Copy</button>
+                  <button class="delete-btn" onclick="deleteSummary('${summary.id}')">🗑️ Delete</button>
+                </div>
+              </div>
+            </div>`;
+        }).join('');
+
+      } catch (error) {
+        loading.style.display = 'none';
+        container.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">❌</div>
+            <h3>Error loading summaries</h3>
+            <p>${error.message}</p>
+          </div>`;
+        console.error('Error loading summaries:', error);
+      }
+    }
+
+    async function deleteSummary(summaryId) {
+      if (!confirm('Are you sure you want to delete this summary?')) {
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/client_summaries', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ summary_id: summaryId })
+        });
+
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        const data = await res.json();
+
+        if (data.ok) {
+          // Remove the card from the page
+          const card = document.querySelector(`[data-id="${summaryId}"]`);
+          if (card) {
+            card.style.opacity = '0';
+            card.style.transform = 'translateY(-20px)';
+            setTimeout(() => {
+              card.remove();
+              // Check if there are any summaries left
+              const container = document.getElementById('summaries-container');
+              if (!container.querySelector('.summary-card')) {
+                loadSummaries();
+              }
+            }, 300);
+          }
+        } else {
+          alert(`Error: ${data.message || 'Failed to delete'}`);
+        }
+      } catch (error) {
+        alert(`Error deleting summary: ${error.message}`);
+      }
+    }
+
+    function copySummary(summaryId) {
+      const card = document.querySelector(`[data-id="${summaryId}"]`);
+      if (!card) return;
+
+      const title = card.querySelector('.summary-title').textContent;
+      const text = card.querySelector('.summary-text').textContent;
+      const fullText = `${title}\n${text}`;
+
+      navigator.clipboard.writeText(fullText).then(() => {
+        const btn = card.querySelector('.copy-btn');
+        const originalText = btn.textContent;
+        btn.textContent = '✓ Copied!';
+        btn.style.background = '#4caf50';
+
+        setTimeout(() => {
+          btn.textContent = originalText;
+          btn.style.background = '#4a6741';
+        }, 2000);
+      }).catch(err => {
+        alert('Failed to copy: ' + err.message);
+      });
+    }
+
+    // Load summaries on page load
+    loadSummaries();
+  </script>
+
+</body>
+</html>

@@ -310,12 +310,12 @@
                            ''; // Don't fallback to JSON.stringify
             }
           }
-          const summary = summaryText ? `<div class="article-summary">${escapeHtml(summaryText)}</div>` : '';
+          const summary = summaryText ? `<div class="article-summary"></div>` : '';
 
           // Check if article is flagged
           const isFlagged = flaggedArticles.has(article.id);
 
-          // Store article data on the checkbox element to avoid escaping issues
+          // Create card structure
           div.innerHTML=`
             <div class="card-content">
               <div style="display:flex;align-items:flex-start;margin-bottom:12px">
@@ -327,13 +327,26 @@
                        data-article-source="${article.source}"
                        ${isFlagged ? 'checked' : ''}
                        title="Flag for intern summary">
-                <h3 class="card-title" style="flex:1;margin:0"><a href="${escapeHtml(article.link)}" target="_blank" rel="noopener">${escapeHtml(article.title)}</a></h3>
+                <h3 class="card-title" style="flex:1;margin:0"><a href="${article.link}" target="_blank" rel="noopener"></a></h3>
               </div>
               <div class="meta">
                 <div>${article.source} · ${formatDate(article.published)}</div>
               </div>
               ${summary}
             </div>`;
+
+          // Safely set title and summary using textContent to decode HTML entities
+          const titleLink = div.querySelector('.card-title a');
+          if (titleLink) {
+            titleLink.textContent = article.title;
+          }
+
+          if (summaryText) {
+            const summaryDiv = div.querySelector('.article-summary');
+            if (summaryDiv) {
+              summaryDiv.textContent = summaryText;
+            }
+          }
 
           // Add event listener to checkbox after it's added to DOM
           const checkbox = div.querySelector('.flag-checkbox');
@@ -487,7 +500,7 @@
         const data = await res.json();
 
         if (data.ok) {
-          response.innerHTML = `<strong>Answer:</strong><br/>${escapeHtml(data.answer)}<br/><br/><small>Analyzed ${data.articles_analyzed} articles</small>`;
+          response.innerHTML = `<strong>Answer:</strong><br/>${data.answer.replace(/</g, '&lt;').replace(/>/g, '&gt;')}<br/><br/><small>Analyzed ${data.articles_analyzed} articles</small>`;
           response.style.display = 'block';
         } else {
           throw new Error(data.error || 'Unknown error');
@@ -539,7 +552,7 @@
         const data = await res.json();
 
         if (data.ok) {
-          response.innerHTML = `<strong>Weekly Summary:</strong><br/>${escapeHtml(data.answer)}<br/><br/><small>Analyzed ${data.articles_analyzed} articles from the past 7 days</small>`;
+          response.innerHTML = `<strong>Weekly Summary:</strong><br/>${data.answer.replace(/</g, '&lt;').replace(/>/g, '&gt;')}<br/><br/><small>Analyzed ${data.articles_analyzed} articles from the past 7 days</small>`;
           response.style.display = 'block';
         } else {
           throw new Error(data.error || 'Unknown error');
@@ -637,12 +650,13 @@ ${articleText}`;
           const otherLines = lines.filter(line => !line.includes('Summary:') && line !== titleLine);
 
           // Reconstruct: Title (bold) + Summary + other content
-          let reconstructed = `<strong>${escapeHtml(titleLine)}</strong>`;
+          const escapeForHtml = (str) => str.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          let reconstructed = `<strong>${escapeForHtml(titleLine)}</strong>`;
           if (summaryLines.length > 0) {
-            reconstructed += '<br/>' + summaryLines.map(l => escapeHtml(l)).join('<br/>');
+            reconstructed += '<br/>' + summaryLines.map(l => escapeForHtml(l)).join('<br/>');
           }
           if (otherLines.length > 0) {
-            reconstructed += '<br/>' + otherLines.map(l => escapeHtml(l)).join('<br/>');
+            reconstructed += '<br/>' + otherLines.map(l => escapeForHtml(l)).join('<br/>');
           }
 
           currentClientTitle = titleLine;
@@ -1079,13 +1093,19 @@ ${articleText}`;
       div.innerHTML = `
         <div class="card-content">
           <span style="position:absolute;top:10px;right:10px;background:#4caf50;color:white;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600">NEW</span>
-          <h3 class="card-title"><a href="${escapeHtml(mention.link)}" target="_blank" rel="noopener">${escapeHtml(mention.title)}</a></h3>
+          <h3 class="card-title"><a href="${mention.link}" target="_blank" rel="noopener"></a></h3>
           <div class="meta">
-            <div>${escapeHtml(mention.source)} · Just now</div>
+            <div><span class="source-name"></span> · Just now</div>
           </div>
           ${chips ? `<div class="chip-container">${chips}</div>` : ''}
         </div>
       `;
+
+      // Safely set text content to decode HTML entities
+      const titleLink = div.querySelector('.card-title a');
+      const sourceName = div.querySelector('.source-name');
+      if (titleLink) titleLink.textContent = mention.title;
+      if (sourceName) sourceName.textContent = mention.source;
       
       // Insert at the top of the list
       list.insertBefore(div, list.firstChild);

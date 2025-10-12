@@ -567,9 +567,9 @@
       // Bullet points: - text -> <li>text</li>
       html = html.replace(/^- (.+)$/gm, '<li style="margin-left:20px;margin-bottom:4px">$1</li>');
 
-      // Line breaks
-      html = html.replace(/\n\n/g, '<br/><br/>');
-      html = html.replace(/\n/g, '<br/>');
+      // Line breaks - reduce white space
+      html = html.replace(/\n\n+/g, '<br/>'); // Multiple newlines become single break
+      html = html.replace(/\n/g, ' '); // Single newlines become spaces
 
       return html;
     }

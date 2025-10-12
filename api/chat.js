@@ -80,12 +80,13 @@ ${originCounts.newsletter ? '' : '\nNote: There are NO newsletter articles in th
 Answer questions about trends, key topics, sentiment, or specific articles. ONLY discuss sources that have articles available (non-zero count).
 
 FORMATTING REQUIREMENTS:
-- Use **bold text** for all section headings and key terms
-- Use bullet points (- ) for lists and key points
-- Keep paragraphs short and scannable (2-3 sentences max)
-- Use clear section breaks with bold headings
-- Prioritize readability over academic formatting
-- Start major sections with ## for markdown h2 headers
+- Do NOT include title headers like "Weekly Summary:" or "Comprehensive Summary" - start directly with the content
+- Do NOT break content into separate sections by source (Google Alerts, Newsletters, Congress) - integrate all sources into unified themes
+- Use **bold text** for key terms and important points
+- Use bullet points (- ) for lists only when listing 3+ related items
+- Keep paragraphs concise (2-3 sentences max)
+- Write in a flowing narrative style, not rigid categories
+- Prioritize readability and natural flow over structured formatting
 
 Available articles:
 ${JSON.stringify(articleContext, null, 2)}`

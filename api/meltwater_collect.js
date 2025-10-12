@@ -124,16 +124,37 @@ export default async function handler(req, res) {
     let found = 0, stored = 0, skipped = 0;
     const errors = [];
 
-    // Fetch articles from Meltwater API
+    // Fetch articles from Meltwater API v3
     // Fetch recent articles (last 24 hours by default)
-    const fromDate = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const endDate = new Date();
+    const startDate = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
-    const response = await fetch(`https://api.meltwater.com/v2/searches/${MELTWATER_SEARCH_ID}/documents?from=${fromDate}&limit=100`, {
-      method: 'GET',
+    const requestBody = {
+      searches: {
+        all: [parseInt(MELTWATER_SEARCH_ID)],
+        any: [],
+        none: []
+      },
+      start: startDate.toISOString(),
+      end: endDate.toISOString(),
+      page: 1,
+      page_size: 100,
+      sort_by: "date",
+      sort_order: "desc",
+      tz: "UTC",
+      template: {
+        name: "api.json"
+      }
+    };
+
+    const response = await fetch(`https://api.meltwater.com/v3/explore_plus/search?workspace_id=none`, {
+      method: 'POST',
       headers: {
         'apikey': MELTWATER_API_KEY,
-        'Accept': 'application/json'
-      }
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(requestBody)
     });
 
     if (!response.ok) {
@@ -142,13 +163,14 @@ export default async function handler(req, res) {
     }
 
     const data = await response.json();
-    console.log(`Meltwater API response:`, {
+    console.log(`Meltwater API v3 response:`, {
       status: response.status,
-      documentCount: data.documents?.length || 0
+      totalResults: data.total_results || 0,
+      documentCount: data.results?.length || 0
     });
 
-    // Process documents (adjust field names based on actual Meltwater API response)
-    const documents = data.documents || data.results || data.data || [];
+    // Process documents from v3 API response
+    const documents = data.results || [];
 
     for (const doc of documents) {
       try {

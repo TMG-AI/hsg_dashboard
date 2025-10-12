@@ -18,6 +18,8 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: "article_id is required" });
       }
 
+      console.log(`POST: Flagging article_id: "${article_id}" (type: ${typeof article_id})`);
+
       const flaggedArticle = {
         id: article_id,
         title: title || "Unknown",
@@ -25,6 +27,8 @@ export default async function handler(req, res) {
         source: source || "Unknown",
         flagged_at: new Date().toISOString()
       };
+
+      console.log(`POST: Storing flagged article:`, JSON.stringify(flaggedArticle));
 
       await redis.sadd(FLAGGED_SET, JSON.stringify(flaggedArticle));
 
@@ -45,11 +49,16 @@ export default async function handler(req, res) {
       // Get all flagged articles
       const flagged = await redis.smembers(FLAGGED_SET);
 
+      console.log(`DELETE: Looking for article_id: "${article_id}" (type: ${typeof article_id})`);
+      console.log(`DELETE: Found ${flagged.length} flagged articles in Redis`);
+
       // Find and remove the matching one
       let removed = false;
       for (const item of flagged) {
         try {
           const parsed = JSON.parse(item);
+          console.log(`DELETE: Comparing with parsed.id: "${parsed.id}" (type: ${typeof parsed.id}), match: ${parsed.id === article_id}`);
+
           if (parsed.id === article_id) {
             const result = await redis.srem(FLAGGED_SET, item);
             removed = true;
@@ -65,20 +74,14 @@ export default async function handler(req, res) {
         }
       }
 
-      // If we didn't find it, log details for debugging
-      console.log(`Article ${article_id} not found in flagged set. Flagged items:`, flagged.map(item => {
-        try {
-          const parsed = JSON.parse(item);
-          return parsed.id;
-        } catch {
-          return 'parse_error';
-        }
-      }));
+      // If we didn't find it, still return success since the desired state (unflagged) is achieved
+      console.log(`Article ${article_id} not found in flagged set (already unflagged or never flagged)`);
 
-      return res.status(404).json({
-        ok: false,
-        message: "Article not found in flagged list",
-        article_id
+      return res.status(200).json({
+        ok: true,
+        message: "Article was not flagged (no action needed)",
+        article_id,
+        already_unflagged: true
       });
 
     } else if (req.method === "GET") {

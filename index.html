@@ -517,7 +517,8 @@
         const data = await res.json();
 
         if (data.ok) {
-          response.innerHTML = `<strong>Answer:</strong><br/>${data.answer.replace(/</g, '&lt;').replace(/>/g, '&gt;')}<br/><br/><small>Analyzed ${data.articles_analyzed} articles</small>`;
+          const formattedAnswer = markdownToHtml(data.answer);
+          response.innerHTML = `<strong>Answer:</strong><br/><br/>${formattedAnswer}<br/><br/><small>Analyzed ${data.articles_analyzed} articles</small>`;
           response.style.display = 'block';
         } else {
           throw new Error(data.error || 'Unknown error');
@@ -544,6 +545,33 @@
       saveSection.style.display = 'none';
       currentClientSummary = null;
       currentClientTitle = null;
+    }
+
+    // Simple markdown to HTML converter
+    function markdownToHtml(text) {
+      if (!text) return '';
+
+      // Escape dangerous HTML first
+      let html = text.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+      // Convert markdown to HTML
+      // Headers: ## Header -> <h3>Header</h3>
+      html = html.replace(/^## (.+)$/gm, '<h3 style="font-size:16px;font-weight:700;margin:12px 0 8px 0;color:#1a1a1a">$1</h3>');
+      html = html.replace(/^### (.+)$/gm, '<h4 style="font-size:14px;font-weight:700;margin:10px 0 6px 0;color:#333">$1</h4>');
+      html = html.replace(/^#### (.+)$/gm, '<strong style="display:block;margin:8px 0 4px 0">$1</strong>');
+
+      // Bold: **text** or __text__ -> <strong>text</strong>
+      html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+      html = html.replace(/__(.+?)__/g, '<strong>$1</strong>');
+
+      // Bullet points: - text -> <li>text</li>
+      html = html.replace(/^- (.+)$/gm, '<li style="margin-left:20px;margin-bottom:4px">$1</li>');
+
+      // Line breaks
+      html = html.replace(/\n\n/g, '<br/><br/>');
+      html = html.replace(/\n/g, '<br/>');
+
+      return html;
     }
 
     // Summarize Weekly Articles function
@@ -583,7 +611,9 @@
         const data = await res.json();
 
         if (data.ok) {
-          response.innerHTML = `<strong>Weekly Summary:</strong><br/>${data.answer.replace(/</g, '&lt;').replace(/>/g, '&gt;')}<br/><br/><small>Analyzed ${data.articles_analyzed} articles from the past 7 days</small>`;
+          // Convert markdown to HTML
+          const formattedAnswer = markdownToHtml(data.answer);
+          response.innerHTML = `<strong>Weekly Summary:</strong><br/><br/>${formattedAnswer}<br/><br/><small>Analyzed ${data.articles_analyzed} articles from the past 7 days</small>`;
           response.style.display = 'block';
         } else {
           throw new Error(data.error || 'Unknown error');

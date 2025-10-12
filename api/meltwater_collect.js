@@ -15,7 +15,6 @@ const MAX_MENTIONS = 5000;
 // Meltwater API configuration
 const MELTWATER_API_KEY = process.env.MELTWATER_API_KEY;
 const MELTWATER_SEARCH_ID = "27861003";
-const MELTWATER_API_URL = process.env.MELTWATER_API_URL || "https://api.meltwater.com/v2";
 
 // Helper functions
 function normalizeUrl(u) {
@@ -126,13 +125,10 @@ export default async function handler(req, res) {
     const errors = [];
 
     // Fetch articles from Meltwater API
-    // Note: Adjust the endpoint and parameters based on Meltwater's actual API documentation
-    const apiUrl = `${MELTWATER_API_URL}/searches/${MELTWATER_SEARCH_ID}/documents`;
-
     // Fetch recent articles (last 24 hours by default)
     const fromDate = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
-    const response = await fetch(`${apiUrl}?from=${fromDate}&limit=100`, {
+    const response = await fetch(`https://api.meltwater.com/v2/searches/${MELTWATER_SEARCH_ID}/documents?from=${fromDate}&limit=100`, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${MELTWATER_API_KEY}`,

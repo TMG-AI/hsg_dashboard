@@ -50,7 +50,6 @@ Required for production:
 - `NEWSLETTER_WEBHOOK_SECRET` - Newsletter webhook auth (optional)
 - `NEWSLETTER_RSS_FEEDS` - Semicolon or comma-separated list of newsletter RSS feed URLs (optional)
 - `MELTWATER_API_KEY` - Meltwater API authentication key for searchid 27861003 (optional)
-- `MELTWATER_API_URL` - Meltwater API base URL (optional, defaults to https://api.meltwater.com/v2)
 
 ## Development Commands
 

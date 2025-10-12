@@ -148,7 +148,8 @@ export default async function handler(req, res) {
           sentiment: normalizeSentiment(doc),
           sentiment_label: doc.sentiment || null,
           streamed: true, // Mark as streamed
-          received_at: new Date().toISOString()
+          received_at: new Date().toISOString(),
+          searchid: doc.searchid || doc.search_id || payload.searchid || payload.search_id || null // Capture searchid from document or payload
         };
 
         // Store in Redis with timestamp as score

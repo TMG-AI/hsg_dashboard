@@ -1,0 +1,1221 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Meltwater Dashboard - Search ID 27861003</title>
+  <style>
+    *{box-sizing:border-box}
+    body{
+      font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;
+      margin:0;
+      background:linear-gradient(135deg,#f8fffe 0%,#f1f8f6 100%);
+      min-height:100vh;color:#1a1a1a
+    }
+    header{
+      background:linear-gradient(135deg,#4a6741 0%,#5a7c50 100%);
+      color:#fff;padding:24px 32px;box-shadow:0 4px 20px rgba(74,103,65,.15);
+      position:relative;overflow:hidden
+    }
+    header::before{
+      content:'';position:absolute;inset:0;
+      background:url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M 10 0 L 0 0 0 10" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="0.5"/></pattern></defs><rect width="100" height="100" fill="url(%23grid)"/></svg>')
+    }
+    .header-content{position:relative;z-index:1}
+    .header-title{margin:0;font-size:28px;font-weight:600;letter-spacing:-.02em}
+    .header-subtitle{color:rgba(255,255,255,.8);font-size:14px;margin:4px 0 0 0;font-weight:400}
+
+    /* Summary Bar */
+    .summary-section{
+      background:#fff;margin:20px auto;max-width:1200px;border-radius:16px;
+      box-shadow:0 4px 20px rgba(0,0,0,.08);border:1px solid rgba(139,195,74,.2);overflow:hidden
+    }
+    .summary-grid{
+      display:grid;grid-template-columns:repeat(6,1fr);gap:20px;background:transparent;padding:20px
+    }
+    .summary-item{
+      background:#fff;border-radius:16px;padding:24px;box-shadow:0 4px 20px rgba(0,0,0,.08);
+      border:1px solid rgba(139,195,74,.2);transition:.3s;text-align:center;cursor:pointer
+    }
+    .summary-item:hover{transform:translateY(-2px);box-shadow:0 8px 30px rgba(0,0,0,.12);border-color:rgba(139,195,74,.4)}
+    .summary-item.active{border:2px solid #4a6741;background:rgba(139,195,74,.1)}
+    .summary-label{color:#333;font-size:16px;font-weight:700;margin-bottom:16px;text-transform:uppercase;letter-spacing:.8px;min-height:40px;display:flex;align-items:flex-end;justify-content:center}
+    .summary-value{font-size:32px;font-weight:700;color:#4a6741;margin:0}
+
+    .wrap{max-width:1200px;margin:0 auto;padding:32px 24px}
+    .controls{display:flex;gap:8px;align-items:center;margin:18px 0 6px 0;flex-wrap:wrap}
+    input{padding:10px 12px;border-radius:10px;border:1px solid #d9e1ec}
+    .section-title{font-size:20px;font-weight:700;color:#1a1a1a;margin:18px 0 10px 0;display:flex;align-items:center;gap:12px}
+    .section-title::before{content:'';width:4px;height:20px;background:linear-gradient(135deg,#8bc34a,#7cb342);border-radius:2px}
+    .articles-container{display:grid;gap:20px}
+    .card{background:#fff;border-radius:16px;box-shadow:0 4px 20px rgba(0,0,0,.08);padding:0;border:1px solid rgba(139,195,74,.2);transition:.3s;position:relative;overflow:hidden;opacity:0;transform:translateY(20px);animation:slideIn .5s ease forwards}
+    @keyframes slideIn{to{opacity:1;transform:translateY(0)}}
+    .card::before{content:'';position:absolute;top:0;left:0;width:100%;height:4px;background:linear-gradient(90deg,#8bc34a,#7cb342)}
+    .card:hover{transform:translateY(-3px);box-shadow:0 12px 40px rgba(0,0,0,.15);border-color:rgba(139,195,74,.4)}
+    .card-content{padding:24px}
+    .card-title{font-size:18px;font-weight:600;color:#1a1a1a;margin:0 0 12px 0;line-height:1.4}
+    .card-title a{color:inherit;text-decoration:none;transition:.3s}
+    .card-title a:hover{color:#4a6741}
+    .meta{color:#666;font-size:14px;margin-bottom:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+    .chip{background:linear-gradient(135deg,rgba(139,195,74,.15),rgba(139,195,74,.25));border:1px solid rgba(139,195,74,.3);border-radius:12px;padding:6px 12px;margin:4px 6px 4px 0;font-size:12px;font-weight:500;display:inline-block;color:#4a6741;transition:.3s}
+    .chip:hover{background:linear-gradient(135deg,rgba(139,195,74,.25),rgba(139,195,74,.35));transform:scale(1.05)}
+    .chip-container{margin-top:16px;padding-top:16px;border-top:1px solid rgba(139,195,74,.2)}
+    .article-summary{color:#666;font-size:14px;line-height:1.5;margin-top:12px;padding-top:12px;border-top:1px solid rgba(139,195,74,.2)}
+
+    .loading{display:flex;align-items:center;justify-content:center;padding:40px;color:#666}
+    .loading::before{content:'';width:20px;height:20px;border:2px solid rgba(139,195,74,.3);border-top:2px solid #8bc34a;border-radius:50%;animation:spin 1s linear infinite;margin-right:12px}
+    @keyframes spin{0%{transform:rotate(0)}100%{transform:rotate(360deg)}}
+    #err{background:linear-gradient(135deg,#ffebee,#fce4ec);border:1px solid #ffcdd2;color:#d32f2f;padding:16px 20px;border-radius:12px;margin:16px 0;font-weight:500;display:none}
+    .empty-state{text-align:center;padding:60px 20px;color:#666;background:#fff;border-radius:16px;border:1px solid rgba(139,195,74,.2)}
+    .empty-state-icon{font-size:48px;margin-bottom:16px;opacity:.5}
+    .refresh-btn{background:#1b5e20;color:#fff;border:none;padding:12px 24px;border-radius:12px;font-weight:600;cursor:pointer;transition:.3s;margin-top:16px}
+    .refresh-btn:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(139,195,74,.3)}
+    .card-loading{background:#fff;border-radius:16px;padding:24px;margin:16px 0;border:1px solid rgba(139,195,74,.2);animation:pulse 1.5s ease-in-out infinite}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.7}}
+    .skeleton{background:linear-gradient(90deg,#f0f0f0 25%,#e0e0e0 50%,#f0f0f0 75%);background-size:200% 100%;animation:loading 1.5s infinite;border-radius:4px}
+    @keyframes loading{0%{background-position:200% 0}100%{background-position:-200% 0}}
+    .skeleton-title{height:20px;margin-bottom:12px;width:75%}
+    .skeleton-meta{height:14px;margin-bottom:8px;width:40%}
+    .skeleton-chip{height:24px;width:60px;display:inline-block;margin-right:8px}
+    @media (max-width:768px){
+      .wrap{padding:20px 16px}
+      .meta{flex-direction:column;align-items:flex-start;gap:8px}
+      .summary-grid{grid-template-columns:repeat(2,1fr)}
+    }
+
+    .refresh-news-btn{
+      background:#1b5e20;
+      color:#fff;border:none;padding:10px 20px;border-radius:10px;font-weight:600;cursor:pointer;transition:.3s;font-size:14px;margin-left:12px
+    }
+    .refresh-news-btn:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(74,103,65,.3)}
+    .refresh-news-btn:disabled{opacity:.6;cursor:not-allowed;transform:none}
+    .refresh-news-btn.loading{opacity:.8}
+
+    /* Chat Interface */
+    .chat-container{background:#fff;border-radius:16px;box-shadow:0 4px 20px rgba(0,0,0,.08);border:1px solid rgba(139,195,74,.2);padding:20px;margin-bottom:20px}
+    .chat-header{font-size:18px;font-weight:700;color:#1a1a1a;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+    .chat-input{width:100%;padding:12px;border:1px solid rgba(139,195,74,.3);border-radius:10px;font-size:14px;resize:vertical;min-height:60px}
+    .chat-button{background:#4a6741;color:#fff;border:none;padding:12px 24px;border-radius:10px;font-weight:600;cursor:pointer;transition:.3s;margin-top:8px}
+    .chat-button:hover{background:#5a7c50;transform:translateY(-1px)}
+    .chat-button:disabled{opacity:.6;cursor:not-allowed}
+    .chat-response{background:rgba(139,195,74,.1);border-left:4px solid #4a6741;padding:16px;border-radius:8px;margin-top:16px;line-height:1.6;display:none}
+    .chat-loading{display:none;align-items:center;gap:8px;color:#666;margin-top:12px}
+
+    /* Article Flag Checkbox */
+    .flag-checkbox{
+      width:18px;
+      height:18px;
+      cursor:pointer;
+      accent-color:#4a6741;
+      border:2px solid #4a6741;
+      margin-right:12px;
+      vertical-align:middle;
+      flex-shrink:0;
+    }
+    .flag-checkbox:checked{
+      background:#4a6741;
+    }
+ /* Base chip style */
+.chip{
+  background:linear-gradient(135deg,rgba(139,195,74,.15),rgba(139,195,74,.25));
+  border:1px solid rgba(139,195,74,.3);
+  border-radius:12px;
+  padding:6px 12px;
+  margin:4px 6px 4px 0;
+  font-size:12px;
+  font-weight:500;
+  display:inline-block;
+  color:#4a6741;
+  transition:.3s;
+}
+
+/* Sentiment variants */
+.chip--pos{
+  background:linear-gradient(135deg,rgba(76,175,80,.15),rgba(76,175,80,.25));
+  border:1px solid rgba(76,175,80,.35);
+  color:#1b5e20;
+}
+.chip--neg{
+  background:linear-gradient(135deg,rgba(244,67,54,.15),rgba(244,67,54,.25));
+  border:1px solid rgba(244,67,54,.35);
+  color:#b71c1c;
+}
+.chip--neu{
+  background:linear-gradient(135deg,rgba(158,158,158,.15),rgba(158,158,158,.25));
+  border:1px solid rgba(158,158,158,.35);
+  color:#424242;
+}
+    /* --- Spikes UI --- */
+.spike-section{background:#fff;margin:20px auto;max-width:1200px;border-radius:16px;box-shadow:0 4px 20px rgba(0,0,0,.08);border:1px solid rgba(255,193,7,.35);padding:20px}
+.spike-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;margin-top:10px}
+.spike-card{background:linear-gradient(135deg,#fff7e6,#fff0c2);border:1px solid #ffc107;border-radius:12px;padding:14px}
+.spike-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.spike-platform{background:rgba(230,126,34,.12);color:#a05a11;padding:4px 8px;border-radius:6px;font-size:12px;font-weight:600}
+.spike-pct{font-size:20px;font-weight:800;color:#a05a11}
+.spike-title{margin:0 0 6px 0;font-size:14px;font-weight:600;color:#1a1a1a}
+.spike-meta{margin:0;font-size:12px;color:#555}
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="header-content">
+      <h1 class="header-title">Meltwater Dashboard</h1>
+      <p class="header-subtitle">Search ID 27861003 - Media monitoring</p>
+    </div>
+  </header>
+
+  <!-- Summary Bar (Meltwater Only) -->
+  <div class="summary-section">
+    <div class="summary-grid" style="grid-template-columns:repeat(3,1fr)">
+      <div class="summary-item active">
+        <div class="summary-label">Last 24 Hours</div>
+        <div class="summary-value" id="sb-24h">—</div>
+      </div>
+      <div class="summary-item">
+        <div class="summary-label">Last 7 Days</div>
+        <div class="summary-value" id="sb-7d">—</div>
+      </div>
+      <div class="summary-item">
+        <div class="summary-label">Last 30 Days</div>
+        <div class="summary-value" id="sb-30d">—</div>
+      </div>
+    </div>
+  </div>
+<!-- Active Spikes (Meltwater) -->
+<div class="spike-section" id="spike-section" style="display:none">
+  <h2 class="section-title" style="margin-top:6px">🚨 Active Spikes (Today)</h2>
+  <div id="spike-container" class="spike-grid"></div>
+</div>
+  <!-- Sentiment Shift (Meltwater) -->
+<div class="spike-section" id="sent-section" style="display:none;border-color:#90caf9">
+  <h2 class="section-title" style="margin-top:6px">🧭 Sentiment Shift (Today)</h2>
+  <div id="sent-container"></div>
+</div>
+  <div class="wrap">
+    <!-- AI Chat Interface -->
+    <div class="chat-container">
+      <div class="chat-header">
+        💬 AI Assistant
+        <span style="font-size:12px;font-weight:400;color:#666;margin-left:auto">Powered by OpenAI</span>
+      </div>
+      <textarea
+        id="chat-input"
+        class="chat-input"
+        placeholder="Ask questions, paste full article for client summary, or click 'Summarize Weekly Articles'..."
+      ></textarea>
+      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+        <button id="chat-button" class="chat-button" onclick="askAI()" style="flex:1;min-width:150px">Ask AI</button>
+        <button id="summarize-button" class="chat-button" onclick="summarizeWeekly()" style="flex:1;background:#5a7c50;min-width:150px">Summarize Weekly Articles</button>
+        <button id="client-summary-button" class="chat-button" onclick="generateClientSummary()" style="flex:1;background:#6b8e5f;min-width:150px">Client Summary</button>
+        <button id="clear-chat-button" class="chat-button" onclick="clearChat()" style="background:#999;min-width:120px" title="Clear the chat history">Clear Chat</button>
+      </div>
+
+      <div id="chat-loading" class="chat-loading">
+        <span>🤔 Analyzing articles...</span>
+      </div>
+      <div id="chat-response" class="chat-response"></div>
+
+      <!-- Save to Client Summaries Button (hidden by default) -->
+      <div id="save-summary-section" style="display:none;margin-top:12px">
+        <button onclick="saveToClientSummaries()" class="chat-button" style="background:#4a6741;width:100%">
+          💾 Save to Client Summaries Page
+        </button>
+      </div>
+    </div>
+
+    <div class="controls">
+      <label for="search">Search</label>
+      <input id="search" placeholder="Filter title…"/>
+      <button id="refresh-news-btn" class="refresh-news-btn">
+        <span id="refresh-btn-text">Get Latest News</span>
+      </button>
+      <button id="flagged-articles-btn" class="refresh-news-btn" onclick="showFlaggedArticles()">
+        <span>Flagged Articles (<span id="flagged-count">0</span>)</span>
+      </button>
+      <button class="refresh-news-btn" onclick="window.location.href='/client-summaries.html'">
+        <span>📋 Client Summaries</span>
+      </button>
+      <button class="refresh-news-btn" onclick="window.location.href='/index.html'">
+        <span>🏠 Main Dashboard</span>
+      </button>
+    </div>
+
+    <div id="err"></div>
+    <h2 class="section-title">Recent Mentions</h2>
+    <div id="loading" class="loading" style="display:none">Loading mentions...</div>
+    <div id="list" class="articles-container"></div>
+  </div>
+
+  <script>
+    // XSS Protection: Escape HTML in user-generated content
+    function escapeHtml(text) {
+      if (!text) return '';
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    let loadingSkeletons = [];
+
+    function createLoadingSkeleton(){
+      const div=document.createElement('div');
+      div.className='card-loading';
+      div.innerHTML=`
+        <div class="skeleton skeleton-title"></div>
+        <div class="skeleton skeleton-meta"></div>
+        <div class="skeleton skeleton-meta" style="width:30%"></div>
+        <div style="margin-top:16px">
+          <div class="skeleton skeleton-chip"></div>
+          <div class="skeleton skeleton-chip"></div>
+          <div class="skeleton skeleton-chip"></div>
+        </div>`;
+      return div;
+    }
+    function showLoadingSkeletons(count=5){
+      const list=document.getElementById('list');
+      list.innerHTML=''; loadingSkeletons=[];
+      for (let i=0;i<count;i++){
+        const s=createLoadingSkeleton(); s.style.animationDelay=`${i*0.1}s`;
+        list.appendChild(s); loadingSkeletons.push(s);
+      }
+    }
+    function removeLoadingSkeletons(){
+      loadingSkeletons.forEach(s=>s.parentNode&&s.parentNode.removeChild(s));
+      loadingSkeletons=[];
+    }
+
+    function formatDate(s){
+      const d=new Date(s);
+      return d.toLocaleString('en-US',{year:'numeric',month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit',hour12:true});
+    }
+
+    function addArticleCard(container, article, delay=0){
+      return new Promise(resolve=>{
+        setTimeout(()=>{
+          const div=document.createElement('div');
+          div.className='card';
+          div.style.animationDelay=`${delay}s`;
+          // Handle both string summaries (RSS) and object summaries (Meltwater)
+          let summaryText = '';
+          if (article.summary) {
+            if (typeof article.summary === 'string') {
+              summaryText = article.summary;
+            } else if (typeof article.summary === 'object') {
+              // For Meltwater object summaries, try different fields
+              summaryText = article.summary.opening_text ||
+                           article.summary.byline ||
+                           article.summary.content ||
+                           article.summary.description ||
+                           ''; // Don't fallback to JSON.stringify
+            }
+          }
+          const summary = summaryText ? `<div class="article-summary"></div>` : '';
+
+          // Check if article is flagged
+          const isFlagged = flaggedArticles.has(article.id);
+
+          // Create card structure
+          div.innerHTML=`
+            <div class="card-content">
+              <div style="display:flex;align-items:flex-start;margin-bottom:12px">
+                <input type="checkbox"
+                       class="flag-checkbox"
+                       data-article-id="${article.id}"
+                       data-article-title="${article.title.replace(/"/g, '&quot;')}"
+                       data-article-link="${article.link}"
+                       data-article-source="${article.source}"
+                       ${isFlagged ? 'checked' : ''}
+                       title="Flag for intern summary">
+                <h3 class="card-title" style="flex:1;margin:0"><a href="${article.link}" target="_blank" rel="noopener"></a></h3>
+              </div>
+              <div class="meta">
+                <div>${article.source || article.provider || 'Newsletter'} · ${formatDate(article.published)}</div>
+              </div>
+              ${summary}
+            </div>`;
+
+          // Safely set title and summary using textContent to decode HTML entities and strip tags
+          const titleLink = div.querySelector('.card-title a');
+          if (titleLink) {
+            // Use DOMParser to strip HTML tags and decode entities
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(article.title, 'text/html');
+            titleLink.textContent = doc.body.textContent || article.title;
+          }
+
+          if (summaryText) {
+            const summaryDiv = div.querySelector('.article-summary');
+            if (summaryDiv) {
+              // Use DOMParser to strip HTML tags and decode entities
+              const parser = new DOMParser();
+              const doc = parser.parseFromString(summaryText, 'text/html');
+              summaryDiv.textContent = doc.body.textContent || summaryText;
+            }
+          }
+
+          // Add event listener to checkbox after it's added to DOM
+          const checkbox = div.querySelector('.flag-checkbox');
+          checkbox.addEventListener('click', function() {
+            toggleFlag(
+              this.dataset.articleId,
+              this.dataset.articleTitle,
+              this.dataset.articleLink,
+              this.dataset.articleSource,
+              this
+            );
+          });
+          container.appendChild(div);
+          resolve();
+        }, delay*100);
+      });
+    }
+
+    let currentFilter = 'all';
+    let allMentions = [];
+    let flaggedArticles = new Set(); // Track flagged article IDs
+
+    async function loadMentions(){
+      try{
+        document.getElementById('err').style.display='none';
+        showLoadingSkeletons(5);
+
+        const search=(document.getElementById('search').value||'').trim().toLowerCase();
+
+        const qs=new URLSearchParams();
+        qs.set('limit','300');
+
+        const r = await fetch('/api/meltwater_summary', { cache: 'no-store' });
+        if (!r.ok) throw new Error('HTTP '+r.status);
+        const response=await r.json();
+
+        // Store all Meltwater mentions (already filtered by searchid 27861003)
+        allMentions = response.mentions || [];
+        let filtered = allMentions;
+
+        // Apply search filter
+        if (search) filtered = filtered.filter(m => (m.title||"").toLowerCase().includes(search));
+
+        // Sort by date (newest first)
+        filtered.sort((a, b) => new Date(b.published) - new Date(a.published));
+
+        removeLoadingSkeletons();
+
+        const list=document.getElementById('list');
+        list.innerHTML='';
+
+        if (!filtered.length){
+          list.innerHTML=`
+            <div class="empty-state">
+              <div class="empty-state-icon">📊</div>
+              <h3>No mentions for this view</h3>
+              <p>Try searching for a different term or refresh.</p>
+              <button class="refresh-btn" onclick="loadMentions()">Refresh Data</button>
+            </div>`;
+          return;
+        }
+
+        for (let i=0;i<filtered.length;i++){
+          await addArticleCard(list, filtered[i], i*0.05);
+        }
+      }catch(e){
+        removeLoadingSkeletons();
+        const el=document.getElementById('err'); el.style.display='block';
+        el.textContent='Could not load mentions. '+e.message;
+        console.error('Error loading mentions:', e);
+      }
+    }
+
+    // Meltwater dashboard doesn't need origin filtering - only shows searchid 27861003
+
+    document.getElementById('search').addEventListener('input', ()=>{
+      clearTimeout(window._t); window._t=setTimeout(loadMentions,250);
+    });
+    document.getElementById('refresh-news-btn').addEventListener('click', async () => {
+      const btn = document.getElementById('refresh-news-btn');
+      const btnText = document.getElementById('refresh-btn-text');
+      btn.disabled = true; btn.classList.add('loading'); btnText.textContent = 'Loading...';
+      try {
+        await loadMentions();
+        btnText.textContent = 'Updated!';
+        setTimeout(() => { btnText.textContent = 'Get Latest News'; }, 2000);
+      } catch (error) {
+        btnText.textContent = 'Error - Try Again';
+        setTimeout(() => { btnText.textContent = 'Get Latest News'; }, 3000);
+      } finally {
+        btn.disabled = false; btn.classList.remove('loading');
+      }
+    });
+
+    // AI Chat function
+    async function askAI() {
+      const input = document.getElementById('chat-input');
+      const button = document.getElementById('chat-button');
+      const summarizeButton = document.getElementById('summarize-button');
+      const loading = document.getElementById('chat-loading');
+      const response = document.getElementById('chat-response');
+      const question = input.value.trim();
+
+      if (!question) {
+        alert('Please enter a question first');
+        return;
+      }
+
+      // Show loading state
+      button.disabled = true;
+      summarizeButton.disabled = true;
+      loading.style.display = 'flex';
+      response.style.display = 'none';
+
+      try {
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question })
+        });
+
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`);
+        }
+
+        const data = await res.json();
+
+        if (data.ok) {
+          response.innerHTML = `<strong>Answer:</strong><br/>${data.answer.replace(/</g, '&lt;').replace(/>/g, '&gt;')}<br/><br/><small>Analyzed ${data.articles_analyzed} articles</small>`;
+          response.style.display = 'block';
+        } else {
+          throw new Error(data.error || 'Unknown error');
+        }
+      } catch (error) {
+        response.innerHTML = `<strong>Error:</strong> ${error.message}`;
+        response.style.display = 'block';
+      } finally {
+        button.disabled = false;
+        summarizeButton.disabled = false;
+        loading.style.display = 'none';
+      }
+    }
+
+    // Clear chat function
+    function clearChat() {
+      const input = document.getElementById('chat-input');
+      const response = document.getElementById('chat-response');
+      const saveSection = document.getElementById('save-summary-section');
+
+      input.value = '';
+      response.style.display = 'none';
+      response.innerHTML = '';
+      saveSection.style.display = 'none';
+      currentClientSummary = null;
+      currentClientTitle = null;
+    }
+
+    // Summarize Weekly Articles function
+    async function summarizeWeekly() {
+      const input = document.getElementById('chat-input');
+      const button = document.getElementById('chat-button');
+      const summarizeButton = document.getElementById('summarize-button');
+      const clientSummaryButton = document.getElementById('client-summary-button');
+      const loading = document.getElementById('chat-loading');
+      const response = document.getElementById('chat-response');
+      const saveSection = document.getElementById('save-summary-section');
+
+      // Clear input and set default question
+      input.value = '';
+      saveSection.style.display = 'none';
+
+      // Show loading state
+      button.disabled = true;
+      summarizeButton.disabled = true;
+      clientSummaryButton.disabled = true;
+      loading.style.display = 'flex';
+      response.style.display = 'none';
+
+      const question = 'Please provide a comprehensive summary of all articles from this week. Include: 1) Main themes and topics, 2) Key developments by category (Google Alerts, Congress, Newsletter), 3) Any notable trends or patterns, 4) Important Congress bills if any.';
+
+      try {
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question })
+        });
+
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`);
+        }
+
+        const data = await res.json();
+
+        if (data.ok) {
+          response.innerHTML = `<strong>Weekly Summary:</strong><br/>${data.answer.replace(/</g, '&lt;').replace(/>/g, '&gt;')}<br/><br/><small>Analyzed ${data.articles_analyzed} articles from the past 7 days</small>`;
+          response.style.display = 'block';
+        } else {
+          throw new Error(data.error || 'Unknown error');
+        }
+      } catch (error) {
+        response.innerHTML = `<strong>Error:</strong> ${error.message}`;
+        response.style.display = 'block';
+      } finally {
+        button.disabled = false;
+        summarizeButton.disabled = false;
+        clientSummaryButton.disabled = false;
+        loading.style.display = 'none';
+      }
+    }
+
+    // Client Summary variables
+    let currentClientSummary = null;
+    let currentClientTitle = null;
+
+    // Generate Client Summary
+    async function generateClientSummary() {
+      const articleText = document.getElementById('chat-input').value.trim();
+      const button = document.getElementById('chat-button');
+      const summarizeButton = document.getElementById('summarize-button');
+      const clientSummaryButton = document.getElementById('client-summary-button');
+      const loading = document.getElementById('chat-loading');
+      const response = document.getElementById('chat-response');
+      const saveSection = document.getElementById('save-summary-section');
+
+      if (!articleText) {
+        alert('Please paste the full article text (including headline) in the chat box above');
+        return;
+      }
+
+      // Clear input
+      document.getElementById('chat-input').value = '';
+
+      // Show loading state
+      button.disabled = true;
+      summarizeButton.disabled = true;
+      clientSummaryButton.disabled = true;
+      loading.style.display = 'flex';
+      response.style.display = 'none';
+      saveSection.style.display = 'none';
+
+      const prompt = `Create a professional client summary for the following article. The article text includes the headline. Follow this exact format:
+
+[Article Title]
+Summary: [2-4 sentences covering the key points]
+
+Guidelines:
+- Extract the article title from the first line or headline of the pasted text
+- Start the summary with "Summary: "
+- Write 2-4 sentences (typically 3-4)
+- Use professional, factual, neutral tone
+- First sentence: What happened/was announced and when (include specific date if mentioned)
+- Middle sentences: Key details, context, implications
+- Last sentence (if needed): Additional context or reactions
+- Include specific names, titles, roles when mentioned
+- Focus on actionable facts and key developments
+- Include relevant policy/legislative details
+- Note reactions from stakeholders when significant
+
+Full Article Text (including headline):
+${articleText}`;
+
+      try {
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question: prompt })
+        });
+
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`);
+        }
+
+        const data = await res.json();
+
+        if (data.ok) {
+          // Extract and format the response
+          let formattedAnswer = data.answer;
+
+          // Remove brackets around title if present
+          formattedAnswer = formattedAnswer.replace(/^\[([^\]]+)\]/, '$1');
+
+          // Split into lines
+          const lines = formattedAnswer.split('\n').filter(line => line.trim());
+
+          // First line should be the title
+          const titleLine = lines[0].trim();
+
+          // Find the summary part (starts with "Summary:")
+          const summaryLines = lines.filter(line => line.includes('Summary:'));
+          const otherLines = lines.filter(line => !line.includes('Summary:') && line !== titleLine);
+
+          // Reconstruct: Title (bold) + Summary + other content
+          const escapeForHtml = (str) => str.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          let reconstructed = `<strong>${escapeForHtml(titleLine)}</strong>`;
+          if (summaryLines.length > 0) {
+            reconstructed += '<br/>' + summaryLines.map(l => escapeForHtml(l)).join('<br/>');
+          }
+          if (otherLines.length > 0) {
+            reconstructed += '<br/>' + otherLines.map(l => escapeForHtml(l)).join('<br/>');
+          }
+
+          currentClientTitle = titleLine;
+          currentClientSummary = formattedAnswer;
+
+          response.innerHTML = `<strong>Client Summary:</strong><br/><br/>${reconstructed}`;
+          response.style.display = 'block';
+          saveSection.style.display = 'block';
+        } else {
+          throw new Error(data.error || 'Unknown error');
+        }
+      } catch (error) {
+        response.innerHTML = `<strong>Error:</strong> ${error.message}`;
+        response.style.display = 'block';
+      } finally {
+        button.disabled = false;
+        summarizeButton.disabled = false;
+        clientSummaryButton.disabled = false;
+        loading.style.display = 'none';
+      }
+    }
+
+    // Save to Client Summaries Page
+    async function saveToClientSummaries() {
+      if (!currentClientSummary || !currentClientTitle) {
+        alert('No summary to save');
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/client_summaries', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: currentClientTitle,
+            summary: currentClientSummary,
+            created_at: new Date().toISOString()
+          })
+        });
+
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`);
+        }
+
+        const data = await res.json();
+
+        if (data.ok) {
+          alert('Summary saved to Client Summaries page!');
+          document.getElementById('save-summary-section').style.display = 'none';
+        } else {
+          throw new Error(data.error || 'Failed to save');
+        }
+      } catch (error) {
+        alert(`Error saving summary: ${error.message}`);
+      }
+    }
+
+    // Article flagging function
+    async function toggleFlag(articleId, title, link, source, checkbox) {
+      try {
+        if (checkbox.checked) {
+          // Flag the article
+          const res = await fetch('/api/flag_article', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ article_id: articleId, title, link, source })
+          });
+
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const data = await res.json();
+
+          if (data.ok) {
+            flaggedArticles.add(articleId);
+            updateFlaggedCount();
+            console.log('Article flagged:', articleId);
+          } else {
+            throw new Error(data.error || 'Failed to flag');
+          }
+        } else {
+          // Unflag the article
+          const res = await fetch('/api/flag_article', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ article_id: articleId })
+          });
+
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const data = await res.json();
+
+          if (data.ok) {
+            flaggedArticles.delete(articleId);
+            updateFlaggedCount();
+            console.log('Article unflagged:', articleId);
+          } else {
+            throw new Error(data.error || 'Failed to unflag');
+          }
+        }
+      } catch (error) {
+        console.error('Flag toggle error:', error);
+        // Revert checkbox state on error
+        checkbox.checked = !checkbox.checked;
+        alert(`Error: ${error.message}`);
+      }
+    }
+
+    // Load flagged articles on page load
+    async function loadFlaggedArticles() {
+      try {
+        const res = await fetch('/api/flag_article', { method: 'GET' });
+        if (!res.ok) return;
+
+        const data = await res.json();
+        if (data.ok && data.articles) {
+          data.articles.forEach(article => {
+            flaggedArticles.add(article.id);
+          });
+          // Update flagged count
+          updateFlaggedCount();
+        }
+      } catch (error) {
+        console.error('Error loading flagged articles:', error);
+      }
+    }
+
+    // Update flagged articles count
+    function updateFlaggedCount() {
+      const countEl = document.getElementById('flagged-count');
+      if (countEl) {
+        countEl.textContent = flaggedArticles.size;
+      }
+    }
+
+    // Show only flagged articles
+    function showFlaggedArticles() {
+      if (flaggedArticles.size === 0) {
+        alert('No articles have been flagged yet');
+        return;
+      }
+
+      // Filter to show only flagged articles
+      const list = document.getElementById('list');
+      list.innerHTML = '';
+
+      const flaggedItems = allMentions.filter(m => flaggedArticles.has(m.id));
+
+      if (flaggedItems.length === 0) {
+        list.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">📋</div>
+            <h3>No flagged articles found</h3>
+            <p>The flagged articles may not be in the current view.</p>
+            <button class="refresh-btn" onclick="loadMentions()">Show All Articles</button>
+          </div>`;
+        return;
+      }
+
+      document.getElementById('err').style.display = 'none';
+
+      for (let i = 0; i < flaggedItems.length; i++) {
+        addArticleCard(list, flaggedItems[i], i * 0.05);
+      }
+    }
+
+    // Initialize
+    loadFlaggedArticles().then(() => loadMentions());
+  </script>
+
+  <!-- Meltwater Summary data loading -->
+  <script>
+  (async function(){
+    try{
+      // Fetch Meltwater data with searchid 27861003
+      const res = await fetch('/api/meltwater_summary', { cache: 'no-store' });
+      if (!res.ok) throw new Error('HTTP '+res.status);
+      const data = await res.json();
+
+      const fmt = (n) => (typeof n === 'number' && Number.isFinite(n) && n.toLocaleString) ? n.toLocaleString() : (n ?? '0');
+      const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = fmt(val); };
+
+      setText('sb-24h', data.last24h || 0);
+      setText('sb-7d',  data.last7d || 0);
+      setText('sb-30d', data.last30d || 0);
+
+    } catch(e) {
+      console.error('Error loading Meltwater summary:', e);
+    }
+  })();
+  </script>
+
+
+<script>
+/* Hide mock/test cards on the page only (no backend changes) */
+(function(){
+  const BAD_TITLE_PARTS = [
+    'forced write test',
+    'mw clamp test',
+    'sanity write',
+    'browser → n8n test',
+    'browser -> n8n test',
+    'debug write'
+  ];
+  const BAD_SOURCES = ['example news','debug source'];
+  const BAD_LINK_PARTS = ['example.com'];
+
+  function isTestCard(card){
+    const title = (card.querySelector('.card-title')?.innerText || '').toLowerCase().trim();
+    const meta  = (card.querySelector('.meta')?.innerText || '').toLowerCase();
+    const link  = (card.querySelector('.card-title a')?.href || '').toLowerCase();
+
+    // title checks
+    if (BAD_TITLE_PARTS.some(p => title.includes(p))) return true;
+
+    // special: hide "Coinbase headline" only when the source is Example News
+    if (title.includes('coinbase headline') && meta.includes('example news')) return true;
+
+    // source / link checks
+    if (BAD_SOURCES.some(s => meta.includes(s))) return true;
+    if (BAD_LINK_PARTS.some(p => link.includes(p))) return true;
+
+    return false;
+  }
+
+  function purge(){
+    document.querySelectorAll('#list .card').forEach(card => {
+      if (isTestCard(card)) card.remove();
+    });
+  }
+
+  // Run now and whenever the list updates
+  const list = document.getElementById('list');
+  if (list){
+    purge();
+    new MutationObserver(purge).observe(list, { childList: true });
+  } else {
+    // Fallback: run shortly after load if #list is created later
+    document.addEventListener('DOMContentLoaded', () => setTimeout(purge, 800));
+  }
+})();
+</script>
+  <script>
+(async function(){
+  // ---- Spikes (uses your existing #spike-section / #spike-container) ----
+  try{
+    const sec  = document.getElementById('spike-section');
+    const grid = document.getElementById('spike-container');
+    if (sec && grid){
+      const r = await fetch('/api/spike_detection?window=today', { cache:'no-store' });
+      const data = await r.json().catch(()=>({}));
+      const spikes = Array.isArray(data?.spikes) ? data.spikes : [];
+      if (!spikes.length){
+        sec.style.display = 'none';
+      }else{
+        sec.style.display = '';
+        grid.innerHTML = spikes.map(s => {
+          const pct = (s.spike_percentage != null) ? `↑${s.spike_percentage}%` : '';
+          const mentions = (s.mention_count ? s.mention_count.toLocaleString() + ' mentions • ' : '');
+          const when = new Date(s.detected_at || Date.now()).toLocaleTimeString();
+          const link = s.link ? `<div style="margin-top:6px;"><a target="_blank" rel="noreferrer" href="${s.link}" style="text-decoration:underline;">Open in Meltwater</a></div>` : '';
+          return `
+            <div class="spike-card">
+              <div class="spike-hdr">
+                <span class="spike-platform">${(s.platform||'SOCIAL').toUpperCase()}</span>
+                <span class="spike-pct">${pct}</span>
+              </div>
+              <div class="spike-title">${s.title || '(untitled)'}</div>
+              <p class="spike-meta">${mentions}${when}</p>
+              ${link}
+            </div>`;
+        }).join('');
+      }
+    }
+  }catch(e){ console.warn('spikes load error', e); }
+
+  // ---- Sentiment (optional; requires Step 2 container) ----
+  try{
+    const sec  = document.getElementById('sent-section');
+    const box  = document.getElementById('sent-container');
+    if (sec && box){
+      const r = await fetch('/api/sentiment_overview?window=today', { cache:'no-store' });
+      const data = await r.json().catch(()=>({}));
+      const s = data?.latest || null;
+      if (!s){
+        sec.style.display = 'none';
+      }else{
+        sec.style.display = '';
+        const when = new Date(s.detected_at || Date.now()).toLocaleTimeString();
+        const link = s.link ? `<div style="margin-top:6px;"><a target="_blank" rel="noreferrer" href="${s.link}" style="text-decoration:underline;">Details in Meltwater</a></div>` : '';
+        box.innerHTML = `
+          <div style="border:1px solid #90caf9;background:linear-gradient(135deg,#e1f5fe,#e3f2fd);border-radius:12px;padding:12px;">
+            <div style="font-weight:600;margin-bottom:6px;">${s.title || 'Sentiment shift detected'}</div>
+            <div style="font-size:12px;opacity:.7;">Direction: <b>${s.direction || '—'}</b> • ${when}</div>
+            ${link}
+          </div>`;
+      }
+    }
+  }catch(e){ console.warn('sentiment load error', e); }
+})();
+    <!-- Add this to your index.html before the closing </body> tag -->
+<script>
+// Real-time streaming updates
+(function() {
+  let eventSource = null;
+  let reconnectTimeout = null;
+  let reconnectAttempts = 0;
+  
+  function connectToStream() {
+    console.log('Connecting to real-time stream...');
+    
+    eventSource = new EventSource('/api/stream');
+    
+    eventSource.onopen = function() {
+      console.log('Stream connected');
+      reconnectAttempts = 0;
+      
+      // Show live indicator
+      const indicator = document.createElement('div');
+      indicator.id = 'live-indicator';
+      indicator.innerHTML = '🟢 LIVE';
+      indicator.style.cssText = 'position:fixed;top:20px;right:20px;background:#4caf50;color:white;padding:8px 16px;border-radius:20px;font-size:12px;font-weight:600;z-index:1000';
+      document.body.appendChild(indicator);
+    };
+    
+    eventSource.onmessage = function(event) {
+      try {
+        const data = JSON.parse(event.data);
+        handleStreamUpdate(data);
+      } catch (error) {
+        console.error('Error parsing stream data:', error);
+      }
+    };
+    
+    eventSource.onerror = function(error) {
+      console.error('Stream error:', error);
+      eventSource.close();
+      
+      // Update indicator
+      const indicator = document.getElementById('live-indicator');
+      if (indicator) {
+        indicator.innerHTML = '🔴 RECONNECTING...';
+        indicator.style.background = '#f44336';
+      }
+      
+      // Exponential backoff for reconnection
+      reconnectAttempts++;
+      const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
+      
+      clearTimeout(reconnectTimeout);
+      reconnectTimeout = setTimeout(() => {
+        connectToStream();
+      }, delay);
+    };
+  }
+  
+  function handleStreamUpdate(data) {
+    console.log('Stream update:', data);
+    
+    if (data.type === 'new_mentions') {
+      // New mentions received
+      showNewMentionsNotification(data);
+      
+      // Add mentions to the top of the list
+      if (data.mentions && data.mentions.length > 0) {
+        addNewMentionsToList(data.mentions);
+      }
+      
+      // Refresh counts
+      updateMeltwaterCount();
+    } else if (data.type === 'count_update') {
+      // Update Meltwater count directly
+      const meltwaterEl = document.getElementById('sb-mw');
+      if (meltwaterEl && data.meltwater_count !== undefined) {
+        animateCountUpdate(meltwaterEl, data.meltwater_count);
+      }
+    }
+  }
+  
+  function showNewMentionsNotification(data) {
+    // Create notification banner
+    const notification = document.createElement('div');
+    notification.className = 'stream-notification';
+    notification.innerHTML = `
+      <div style="background:linear-gradient(135deg,#4caf50,#8bc34a);color:white;padding:12px 20px;border-radius:8px;margin:16px auto;max-width:1200px;display:flex;align-items:center;justify-content:space-between;animation:slideDown 0.5s ease">
+        <span>📰 ${data.count} new mention${data.count > 1 ? 's' : ''} received!</span>
+        <button onclick="this.parentElement.parentElement.remove()" style="background:none;border:none;color:white;cursor:pointer;font-size:20px">×</button>
+      </div>
+    `;
+    
+    // Insert at top of main content
+    const wrap = document.querySelector('.wrap');
+    if (wrap) {
+      wrap.insertBefore(notification, wrap.firstChild);
+      
+      // Auto-remove after 5 seconds
+      setTimeout(() => {
+        notification.style.opacity = '0';
+        setTimeout(() => notification.remove(), 300);
+      }, 5000);
+    }
+  }
+  
+  function addNewMentionsToList(mentions) {
+    const list = document.getElementById('list');
+    if (!list) return;
+    
+    mentions.forEach((mention, index) => {
+      // Check if mention already exists
+      const existing = list.querySelector(`[data-mention-id="${mention.id}"]`);
+      if (existing) return;
+      
+      // Create new card
+      const div = document.createElement('div');
+      div.className = 'card new-mention';
+      div.setAttribute('data-mention-id', mention.id);
+      div.style.cssText = 'animation:slideInNew 0.5s ease forwards;border:2px solid #4caf50';
+      
+      const chips = (mention.matched || []).map(k => `<span class="chip">${k}</span>`).join('');
+      
+      div.innerHTML = `
+        <div class="card-content">
+          <span style="position:absolute;top:10px;right:10px;background:#4caf50;color:white;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600">NEW</span>
+          <h3 class="card-title"><a href="${mention.link}" target="_blank" rel="noopener"></a></h3>
+          <div class="meta">
+            <div><span class="source-name"></span> · Just now</div>
+          </div>
+          ${chips ? `<div class="chip-container">${chips}</div>` : ''}
+        </div>
+      `;
+
+      // Safely set text content to decode HTML entities and strip tags
+      const titleLink = div.querySelector('.card-title a');
+      const sourceName = div.querySelector('.source-name');
+      if (titleLink) {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(mention.title, 'text/html');
+        titleLink.textContent = doc.body.textContent || mention.title;
+      }
+      if (sourceName) {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(mention.source, 'text/html');
+        sourceName.textContent = doc.body.textContent || mention.source;
+      }
+      
+      // Insert at the top of the list
+      list.insertBefore(div, list.firstChild);
+      
+      // Remove "NEW" badge after 30 seconds
+      setTimeout(() => {
+        const badge = div.querySelector('span');
+        if (badge) badge.style.display = 'none';
+        div.style.border = '1px solid rgba(139,195,74,.2)';
+      }, 30000);
+    });
+  }
+  
+  function animateCountUpdate(element, newValue) {
+    const oldValue = parseInt(element.textContent) || 0;
+    if (oldValue === newValue) return;
+    
+    // Highlight the element
+    element.style.transition = 'all 0.3s';
+    element.style.transform = 'scale(1.2)';
+    element.style.color = '#4caf50';
+    
+    // Animate the number
+    const duration = 1000;
+    const start = Date.now();
+    const diff = newValue - oldValue;
+    
+    function updateNumber() {
+      const elapsed = Date.now() - start;
+      const progress = Math.min(elapsed / duration, 1);
+      const current = Math.floor(oldValue + diff * progress);
+      
+      element.textContent = current.toLocaleString();
+      
+      if (progress < 1) {
+        requestAnimationFrame(updateNumber);
+      } else {
+        // Reset styling
+        setTimeout(() => {
+          element.style.transform = 'scale(1)';
+          element.style.color = '#4a6741';
+        }, 300);
+      }
+    }
+    
+    updateNumber();
+  }
+  
+  async function updateMeltwaterCount() {
+    try {
+      const res = await fetch('/api/summary?window=today', { cache: 'no-store' });
+      const data = await res.json();
+      if (data?.ok && data.totals?.by_origin?.meltwater !== undefined) {
+        const meltwaterEl = document.getElementById('sb-mw');
+        if (meltwaterEl) {
+          animateCountUpdate(meltwaterEl, data.totals.by_origin.meltwater);
+        }
+        
+        // Update total
+        const totalEl = document.getElementById('sb-total');
+        if (totalEl && data.totals?.all !== undefined) {
+          animateCountUpdate(totalEl, data.totals.all);
+        }
+      }
+    } catch (error) {
+      console.error('Error updating counts:', error);
+    }
+  }
+  
+  // Add CSS for animations
+  const style = document.createElement('style');
+  style.textContent = `
+    @keyframes slideDown {
+      from {
+        transform: translateY(-100%);
+        opacity: 0;
+      }
+      to {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    }
+    
+    @keyframes slideInNew {
+      from {
+        transform: translateX(-20px);
+        opacity: 0;
+      }
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+    
+    .stream-notification {
+      position: fixed;
+      top: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 999;
+      transition: opacity 0.3s;
+    }
+    
+    .new-mention {
+      position: relative;
+    }
+  `;
+  document.head.appendChild(style);
+  
+  // Connect when page loads
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', connectToStream);
+  } else {
+    connectToStream();
+  }
+  
+  // Cleanup on page unload
+  window.addEventListener('beforeunload', () => {
+    if (eventSource) {
+      eventSource.close();
+    }
+  });
+})();
+</script>
+</body>
+</html>

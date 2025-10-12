@@ -60,17 +60,29 @@ export default async function handler(req, res){
     // - source: Newsletter name (optional)
     // - matched_keyword: The keyword that triggered the filter (optional)
     const title = body.title || body.headline || "(untitled)";
-    const link  = normalizeUrl(body.link || body.url || "");
-    const ts    = toEpoch(body.published_at || body.isoDate || body.date);
+    const rawLink = body.link || body.url || "";
+    const ts    = toEpoch(body.published_at || body.isoDate || body.date || body.published);
     const source = body.source || body.newsletter || "Newsletter";
     const matchedKeyword = body.matched_keyword || body.keyword || "";
 
-    if (!link || link === "#") {
-      return res.status(200).json({ ok:true, stored:0, note:"missing or invalid link" });
+    // For newsletter articles without individual URLs, generate a unique identifier
+    let link;
+    let canonicalId;
+
+    if (!rawLink || rawLink === "#" || rawLink.trim() === "") {
+      // Generate unique ID based on title + source + timestamp
+      const uniqueStr = `${title}_${source}_${ts}`;
+      let h = 0;
+      for (let i = 0; i < uniqueStr.length; i++) h = (h * 31 + uniqueStr.charCodeAt(i)) >>> 0;
+      canonicalId = `newsletter_${h.toString(16)}`;
+      link = `https://newsletter.internal/${source.toLowerCase().replace(/\s+/g, '-')}/${canonicalId}`;
+    } else {
+      link = normalizeUrl(rawLink);
+      canonicalId = link;
     }
 
-    // Deduplicate by canonical URL
-    const first = await redis.sadd(SEEN_URL, link);
+    // Deduplicate by canonical URL/ID
+    const first = await redis.sadd(SEEN_URL, canonicalId);
     if (first !== 1) {
       console.log(`Newsletter webhook: Skipping duplicate - ${title}`);
       return res.status(200).json({ ok:true, stored:0, note:"duplicate" });
@@ -83,8 +95,8 @@ export default async function handler(req, res){
     }
 
     const mention = {
-      id: idFromCanonical(link),
-      canon: link,
+      id: idFromCanonical(canonicalId),
+      canon: canonicalId,
       section: "Newsletter",
       origin: "newsletter",
       provider: source,
@@ -95,7 +107,8 @@ export default async function handler(req, res){
       published_ts: ts,
       published: new Date(ts*1000).toISOString(),
       summary: body.summary || body.description || "",
-      reach: 0
+      reach: 0,
+      newsletter_article: !rawLink || rawLink.trim() === "" // Flag to indicate it's a newsletter-only article
     };
 
     await redis.zadd(ZSET, { score: ts, member: JSON.stringify(mention) });

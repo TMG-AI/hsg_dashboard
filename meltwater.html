@@ -167,7 +167,7 @@
 
   <!-- Summary Bar (Meltwater Only) -->
   <div class="summary-section">
-    <div class="summary-grid" style="grid-template-columns:repeat(3,1fr)">
+    <div class="summary-grid" style="grid-template-columns:repeat(2,1fr)">
       <div class="summary-item active">
         <div class="summary-label">Last 24 Hours</div>
         <div class="summary-value" id="sb-24h">—</div>
@@ -175,10 +175,6 @@
       <div class="summary-item">
         <div class="summary-label">Last 7 Days</div>
         <div class="summary-value" id="sb-7d">—</div>
-      </div>
-      <div class="summary-item">
-        <div class="summary-label">Last 30 Days</div>
-        <div class="summary-value" id="sb-30d">—</div>
       </div>
     </div>
   </div>
@@ -863,7 +859,6 @@ ${articleText}`;
 
       setText('sb-24h', data.last24h || 0);
       setText('sb-7d',  data.last7d || 0);
-      setText('sb-30d', data.last30d || 0);
 
     } catch(e) {
       console.error('Error loading Meltwater summary:', e);

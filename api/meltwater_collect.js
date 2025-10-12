@@ -126,33 +126,31 @@ export default async function handler(req, res) {
 
     // Fetch articles from Meltwater API v3
     // Fetch recent articles (last 24 hours by default)
-    const endDate = new Date();
-    const startDate = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const now = new Date();
+    const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+    // Format properly for Meltwater (remove milliseconds)
+    const startDate = yesterday.toISOString().replace(/\.\d{3}Z$/, '');
+    const endDate = now.toISOString().replace(/\.\d{3}Z$/, '');
 
     const requestBody = {
-      searches: {
-        all: [parseInt(MELTWATER_SEARCH_ID)],
-        any: [],
-        none: []
-      },
-      start: startDate.toISOString(),
-      end: endDate.toISOString(),
-      page: 1,
-      page_size: 100,
+      start: startDate,
+      end: endDate,
+      tz: "America/New_York",
       sort_by: "date",
       sort_order: "desc",
-      tz: "UTC",
       template: {
         name: "api.json"
-      }
+      },
+      page_size: 100
     };
 
-    const response = await fetch(`https://api.meltwater.com/v3/explore_plus/search?workspace_id=none`, {
+    const response = await fetch(`https://api.meltwater.com/v3/search/${MELTWATER_SEARCH_ID}`, {
       method: 'POST',
       headers: {
-        'apikey': MELTWATER_API_KEY,
         'Accept': 'application/json',
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'apikey': MELTWATER_API_KEY
       },
       body: JSON.stringify(requestBody)
     });

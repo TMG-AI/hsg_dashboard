@@ -187,11 +187,11 @@ export default async function handler(req, res) {
             section: "Newsletter",
             title: title || "(untitled)",
             link: finalLink,
-            source: displaySource(link, feedTitle),
+            source: feedTitle, // Use newsletter name directly as source
             provider: feedTitle,
             matched: ["newsletter", ...matched],
             summary: sum,
-            origin: "newsletter_rss",
+            origin: "newsletter", // Use consistent "newsletter" origin (not "newsletter_rss")
             published_ts: ts,
             published: new Date(ts * 1000).toISOString(),
             reach: 0,

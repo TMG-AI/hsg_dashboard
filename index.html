@@ -330,7 +330,7 @@
                 <h3 class="card-title" style="flex:1;margin:0"><a href="${article.link}" target="_blank" rel="noopener"></a></h3>
               </div>
               <div class="meta">
-                <div>${article.source} · ${formatDate(article.published)}</div>
+                <div>${article.source || article.provider || 'Newsletter'} · ${formatDate(article.published)}</div>
               </div>
               ${summary}
             </div>`;
@@ -395,7 +395,14 @@
         // Apply current filter
         let filtered = allMentions;
         if (currentFilter !== 'all') {
-          filtered = filtered.filter(m => (m.origin || '').toLowerCase() === currentFilter);
+          filtered = filtered.filter(m => {
+            const origin = (m.origin || '').toLowerCase();
+            // Handle both "newsletter" and "newsletter_rss" when filtering by newsletter
+            if (currentFilter === 'newsletter') {
+              return origin === 'newsletter' || origin === 'newsletter_rss';
+            }
+            return origin === currentFilter;
+          });
         }
 
         // Apply search filter
@@ -844,7 +851,10 @@ ${articleText}`;
       const filtered = Array.isArray(data) ? data : [];
 
       for (const m of filtered) {
-        const origin = (m.origin || "").toLowerCase();
+        let origin = (m.origin || "").toLowerCase();
+        // Map newsletter_rss to newsletter for counting
+        if (origin === "newsletter_rss") origin = "newsletter";
+
         if (by.hasOwnProperty(origin)) {
           by[origin]++;
         } else {

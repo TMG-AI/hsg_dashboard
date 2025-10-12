@@ -4,11 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a **media monitoring and PR alerting system** for Coinbase that:
-- Collects mentions from RSS feeds, Google Alerts, and Meltwater webhooks
+This is a **media monitoring and PR alerting system** that:
+- Collects mentions from RSS feeds, Google Alerts, Meltwater webhooks, and newsletters
 - Stores and deduplicates articles in Redis (Upstash)
 - Provides a web dashboard to view mentions and analytics
 - Runs automated collection via Vercel cron jobs
+- Focuses on China-related media monitoring
 
 ## Architecture
 
@@ -42,6 +43,7 @@ Required for production:
 - `RESEND_API_KEY` - For email notifications (optional)
 - `GA_WEBHOOK_SECRET` - Google Alerts webhook auth (optional)
 - `NEWSLETTER_WEBHOOK_SECRET` - Newsletter webhook auth (optional)
+- `NEWSLETTER_RSS_FEEDS` - Semicolon or comma-separated list of newsletter RSS feed URLs (optional)
 
 ## Development Commands
 

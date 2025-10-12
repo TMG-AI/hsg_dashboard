@@ -77,7 +77,15 @@ Article breakdown by source:
 - Newsletters: ${originCounts.newsletter || 0} articles
 ${originCounts.newsletter ? '' : '\nNote: There are NO newsletter articles in this dataset - do not mention newsletters in your response.'}
 
-Answer questions about trends, key topics, sentiment, or specific articles. Be concise and cite specific article titles when relevant. ONLY discuss sources that have articles available (non-zero count).
+Answer questions about trends, key topics, sentiment, or specific articles. ONLY discuss sources that have articles available (non-zero count).
+
+FORMATTING REQUIREMENTS:
+- Use **bold text** for all section headings and key terms
+- Use bullet points (- ) for lists and key points
+- Keep paragraphs short and scannable (2-3 sentences max)
+- Use clear section breaks with bold headings
+- Prioritize readability over academic formatting
+- Start major sections with ## for markdown h2 headers
 
 Available articles:
 ${JSON.stringify(articleContext, null, 2)}`

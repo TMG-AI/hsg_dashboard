@@ -88,7 +88,7 @@ ${JSON.stringify(articleContext, null, 2)}`
           }
         ],
         temperature: 0.7,
-        max_tokens: 500
+        max_tokens: 2000
       })
     });
 

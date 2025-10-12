@@ -373,8 +373,8 @@ export default async function handler(req, res) {
       console.log(`Meltwater total: ${meltwaterCountFromRedis} (Redis cache only)`);
     }
 
-    // Calculate grand total
-    const total = Object.values(by).reduce((a, b) => a + b, 0);
+    // Calculate grand total (EXCLUDE Meltwater - it has its own page)
+    const total = by.google_alerts + by.rss + by.newsletter + by.other;
 
     // Include streaming status in response
     const realtimeStats = {

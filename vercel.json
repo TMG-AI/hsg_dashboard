@@ -3,7 +3,8 @@
   "crons": [
     { "path": "/api/collect", "schedule": "0 */4 * * *" },
     { "path": "/api/congress_collect", "schedule": "0 */4 * * *" },
-    { "path": "/api/newsletter_rss_collect", "schedule": "0 */4 * * *" }
+    { "path": "/api/newsletter_rss_collect", "schedule": "0 */4 * * *" },
+    { "path": "/api/meltwater_collect", "schedule": "0 */4 * * *" }
   ],
   "headers": [
     {

@@ -19,11 +19,16 @@ This is a **media monitoring and PR alerting system** that:
 - All functions connect to Upstash Redis for data storage
 
 **Key Components**:
-- `collect.js` - Main RSS collection cron job (runs every 5 minutes via vercel.json)
-- `meltwater_webhook.js` - Receives real-time Meltwater alerts
+- `collect.js` - Main RSS collection cron job (runs every 4 hours via vercel.json)
+- `congress_collect.js` - Federal legislation collector (runs every 4 hours)
+- `newsletter_rss_collect.js` - Newsletter RSS collector with China/Chinese filtering (runs every 4 hours)
+- `meltwater_collect.js` - Meltwater API collector for searchid 27861003 (runs every 4 hours)
+- `meltwater_webhook.js` - Receives real-time Meltwater alerts (webhook)
 - `ga_webhook.js` - Receives Google Alerts via webhook
 - `summary.js` - API endpoint that returns dashboard data
-- `index.html` - Single-page dashboard frontend (no build step)
+- `meltwater_summary.js` - API endpoint for Meltwater searchid 27861003 data
+- `index.html` - Main dashboard frontend (no build step)
+- `meltwater.html` - Dedicated Meltwater dashboard for searchid 27861003
 
 **Data Storage**:
 - Uses Upstash Redis with sorted sets for time-ordered mentions
@@ -44,6 +49,8 @@ Required for production:
 - `GA_WEBHOOK_SECRET` - Google Alerts webhook auth (optional)
 - `NEWSLETTER_WEBHOOK_SECRET` - Newsletter webhook auth (optional)
 - `NEWSLETTER_RSS_FEEDS` - Semicolon or comma-separated list of newsletter RSS feed URLs (optional)
+- `MELTWATER_API_KEY` - Meltwater API authentication key for searchid 27861003 (optional)
+- `MELTWATER_API_URL` - Meltwater API base URL (optional, defaults to https://api.meltwater.com/v2)
 
 ## Development Commands
 

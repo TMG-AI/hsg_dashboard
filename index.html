@@ -212,6 +212,7 @@
         <button id="chat-button" class="chat-button" onclick="askAI()" style="flex:1;min-width:150px">Ask AI</button>
         <button id="summarize-button" class="chat-button" onclick="summarizeWeekly()" style="flex:1;background:#5a7c50;min-width:150px">Summarize Weekly Articles</button>
         <button id="client-summary-button" class="chat-button" onclick="generateClientSummary()" style="flex:1;background:#6b8e5f;min-width:150px">Client Summary</button>
+        <button id="clear-chat-button" class="chat-button" onclick="clearChat()" style="background:#999;min-width:120px" title="Clear the chat history">Clear Chat</button>
       </div>
 
       <div id="chat-loading" class="chat-loading">
@@ -526,6 +527,20 @@
         summarizeButton.disabled = false;
         loading.style.display = 'none';
       }
+    }
+
+    // Clear chat function
+    function clearChat() {
+      const input = document.getElementById('chat-input');
+      const response = document.getElementById('chat-response');
+      const saveSection = document.getElementById('save-summary-section');
+
+      input.value = '';
+      response.style.display = 'none';
+      response.innerHTML = '';
+      saveSection.style.display = 'none';
+      currentClientSummary = null;
+      currentClientTitle = null;
     }
 
     // Summarize Weekly Articles function

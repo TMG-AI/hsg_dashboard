@@ -13,8 +13,7 @@ const SEEN_LINK = "mentions:seen:canon";
 const MAX_MENTIONS = 5000;
 
 // Meltwater API configuration
-const MELTWATER_API_KEY = process.env.MELTWATER_API_KEY;
-const MELTWATER_SEARCH_ID = "27861003";
+// Environment variables will be loaded inside handler for better reliability
 
 // Helper functions
 function normalizeUrl(u) {
@@ -104,6 +103,10 @@ function extractKeywords(doc) {
 }
 
 export default async function handler(req, res) {
+  // Load environment variables inside handler for better reliability
+  const MELTWATER_API_KEY = process.env.MELTWATER_API_KEY;
+  const MELTWATER_SEARCH_ID = "27861003"; // HSG dashboard search ID
+
   try {
     // Check if Meltwater API is configured
     if (!MELTWATER_API_KEY) {
@@ -164,7 +167,8 @@ export default async function handler(req, res) {
     console.log(`Meltwater API v3 response:`, {
       status: response.status,
       totalResults: data.total_results || 0,
-      documentCount: data.results?.length || 0
+      documentCount: data.results?.length || 0,
+      fullResponse: JSON.stringify(data).substring(0, 500) // Log first 500 chars of response
     });
 
     // Process documents from v3 API response

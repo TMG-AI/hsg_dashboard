@@ -164,26 +164,26 @@ export default async function handler(req, res) {
     }
 
     const data = await response.json();
+
+    // FIXED: Meltwater v3 API returns data.result.documents, not data.results
+    const documents = data.result?.documents || [];
+
     console.log(`Meltwater API v3 response:`, {
       status: response.status,
-      totalResults: data.total_results || 0,
-      documentCount: data.results?.length || 0,
-      fullResponse: JSON.stringify(data).substring(0, 500) // Log first 500 chars of response
+      totalResults: data.result?.document_count || 0,
+      documentCount: documents.length
     });
-
-    // Process documents from v3 API response
-    const documents = data.results || [];
 
     for (const doc of documents) {
       try {
         found++;
 
-        // Extract article data
-        const title = doc.title || doc.headline || (doc.content ? doc.content.substring(0, 100) : 'Untitled');
-        const link = doc.url || doc.link || '#';
-        const content = doc.content || doc.description || doc.snippet || '';
-        const source = doc.source?.name || doc.source_name || 'Meltwater';
-        const publishedDate = doc.published_date || doc.publishedDate || doc.date || new Date().toISOString();
+        // Extract article data from Meltwater v3 API structure
+        const title = doc.content?.title || doc.title || doc.headline || 'Untitled';
+        const link = doc.content?.url || doc.url || doc.link || '#';
+        const contentText = doc.content?.text || doc.content?.byline || doc.description || doc.snippet || '';
+        const source = doc.source?.name || doc.source_name || doc.media?.name || 'Meltwater';
+        const publishedDate = doc.document?.published_date || doc.published_date || doc.date || new Date().toISOString();
 
         // Deduplicate
         const canon = normalizeUrl(link);
@@ -211,7 +211,7 @@ export default async function handler(req, res) {
           link: link,
           source: source,
           matched: extractKeywords(doc),
-          summary: content.substring(0, 500),
+          summary: contentText.substring(0, 500),
           origin: 'meltwater',
           published_ts: ts,
           published: new Date(ts * 1000).toISOString(),

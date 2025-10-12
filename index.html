@@ -335,16 +335,22 @@
               ${summary}
             </div>`;
 
-          // Safely set title and summary using textContent to decode HTML entities
+          // Safely set title and summary using textContent to decode HTML entities and strip tags
           const titleLink = div.querySelector('.card-title a');
           if (titleLink) {
-            titleLink.textContent = article.title;
+            // Use DOMParser to strip HTML tags and decode entities
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(article.title, 'text/html');
+            titleLink.textContent = doc.body.textContent || article.title;
           }
 
           if (summaryText) {
             const summaryDiv = div.querySelector('.article-summary');
             if (summaryDiv) {
-              summaryDiv.textContent = summaryText;
+              // Use DOMParser to strip HTML tags and decode entities
+              const parser = new DOMParser();
+              const doc = parser.parseFromString(summaryText, 'text/html');
+              summaryDiv.textContent = doc.body.textContent || summaryText;
             }
           }
 
@@ -1101,11 +1107,19 @@ ${articleText}`;
         </div>
       `;
 
-      // Safely set text content to decode HTML entities
+      // Safely set text content to decode HTML entities and strip tags
       const titleLink = div.querySelector('.card-title a');
       const sourceName = div.querySelector('.source-name');
-      if (titleLink) titleLink.textContent = mention.title;
-      if (sourceName) sourceName.textContent = mention.source;
+      if (titleLink) {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(mention.title, 'text/html');
+        titleLink.textContent = doc.body.textContent || mention.title;
+      }
+      if (sourceName) {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(mention.source, 'text/html');
+        sourceName.textContent = doc.body.textContent || mention.source;
+      }
       
       // Insert at the top of the list
       list.insertBefore(div, list.firstChild);

@@ -85,11 +85,15 @@ function extractKeywords(doc) {
   }
 
   // Extract China-related keywords from content
-  const content = (doc.content || doc.title || '').toLowerCase();
+  // Note: doc.content is an object in v3 API, extract text from it
+  const contentText = doc.content?.text || doc.content?.title || doc.content?.byline || '';
+  const titleText = doc.content?.title || doc.title || '';
+  const searchText = (contentText + ' ' + titleText).toLowerCase();
+
   const chinaKeywords = ['china', 'chinese', 'beijing', 'xi jinping', 'ccp'];
 
   chinaKeywords.forEach(keyword => {
-    if (content.includes(keyword)) {
+    if (searchText.includes(keyword)) {
       keywords.push(keyword);
     }
   });

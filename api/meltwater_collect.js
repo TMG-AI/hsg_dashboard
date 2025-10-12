@@ -131,8 +131,7 @@ export default async function handler(req, res) {
     const response = await fetch(`https://api.meltwater.com/v2/searches/${MELTWATER_SEARCH_ID}/documents?from=${fromDate}&limit=100`, {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${MELTWATER_API_KEY}`,
-        'Content-Type': 'application/json',
+        'apikey': MELTWATER_API_KEY,
         'Accept': 'application/json'
       }
     });

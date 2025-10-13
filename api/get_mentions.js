@@ -180,14 +180,22 @@ export default async function handler(req, res) {
       );
     }
 
-    // 4. Sort by date (newest first) - fix sort order
+    // 4. Deduplicate by ID (keep first occurrence)
+    const seenIds = new Set();
+    finalItems = finalItems.filter(m => {
+      if (!m.id || seenIds.has(m.id)) return false;
+      seenIds.add(m.id);
+      return true;
+    });
+
+    // 5. Sort by date (newest first) - fix sort order
     finalItems.sort((a, b) => {
       const tsA = a.published_ts || 0;
       const tsB = b.published_ts || 0;
       return tsB - tsA;  // Newest first
     });
 
-    // 5. Apply limit and clean up response
+    // 6. Apply limit and clean up response
     const out = finalItems.slice(0, limit).map(m => ({
       id: m.id,
       title: m.title || "(untitled)",

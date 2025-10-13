@@ -182,6 +182,14 @@ export default async function handler(req, res) {
       try {
         found++;
 
+        // Filter: Skip non-US articles
+        const country = doc.country || doc.media?.country || doc.source?.country || '';
+        if (country && country.toLowerCase() !== 'us' && country.toLowerCase() !== 'usa' && country.toLowerCase() !== 'united states') {
+          console.log(`[Meltwater] Skipping non-US article from ${country}`);
+          skipped++;
+          continue;
+        }
+
         // Extract article data from Meltwater v3 API structure
         const title = doc.content?.title || doc.title || doc.headline || 'Untitled';
         const link = doc.content?.url || doc.url || doc.link || '#';

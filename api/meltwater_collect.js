@@ -10,7 +10,7 @@ const redis = new Redis({
 const ZSET = "mentions:z";
 const SEEN_ID = "mentions:seen";
 const SEEN_LINK = "mentions:seen:canon";
-const MAX_MENTIONS = 5000;
+const RETENTION_DAYS = 14; // Keep articles for 14 days
 
 // Meltwater API configuration
 // Environment variables will be loaded inside handler for better reliability
@@ -205,11 +205,9 @@ export default async function handler(req, res) {
           member: JSON.stringify(mention)
         });
 
-        // Trim old entries
-        const count = await redis.zcard(ZSET);
-        if (count > MAX_MENTIONS) {
-          await redis.zremrangebyrank(ZSET, 0, count - MAX_MENTIONS - 1);
-        }
+        // Trim articles older than RETENTION_DAYS
+        const cutoffTimestamp = Math.floor(Date.now() / 1000) - (RETENTION_DAYS * 24 * 60 * 60);
+        await redis.zremrangebyscore(ZSET, '-inf', cutoffTimestamp);
 
         stored++;
         console.log(`[Meltwater] Stored: "${title}" from ${source}`);

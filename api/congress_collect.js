@@ -10,7 +10,7 @@ const redis = new Redis({
 const ZSET = "mentions:z";
 const SEEN_ID = "mentions:seen";
 const SEEN_LINK = "mentions:seen:canon";
-const MAX_MENTIONS = 5000;
+const RETENTION_DAYS = 14; // Keep articles for 14 days
 
 // Helper functions
 function normalizeUrl(u) {
@@ -169,11 +169,9 @@ export default async function handler(req, res) {
         // Store in Redis
         await redis.zadd(ZSET, { score: ts, member: JSON.stringify(m) });
 
-        // Trim old entries
-        const count = await redis.zcard(ZSET);
-        if (count > MAX_MENTIONS) {
-          await redis.zremrangebyrank(ZSET, 0, count - MAX_MENTIONS - 1);
-        }
+        // Trim articles older than RETENTION_DAYS
+        const cutoffTimestamp = Math.floor(Date.now() / 1000) - (RETENTION_DAYS * 24 * 60 * 60);
+        await redis.zremrangebyscore(ZSET, '-inf', cutoffTimestamp);
 
         stored++;
       } catch (err) {

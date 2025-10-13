@@ -237,6 +237,13 @@
     <div class="controls">
       <label for="search">Search</label>
       <input id="search" placeholder="Filter title…"/>
+      <label for="date-range" style="margin-left:12px">Date Range</label>
+      <select id="date-range" style="padding:10px 12px;border-radius:10px;border:1px solid #d9e1ec;background:#fff;cursor:pointer">
+        <option value="7">Last 7 days</option>
+        <option value="1">Last 24 hours</option>
+        <option value="14">Last 14 days</option>
+        <option value="custom">Custom...</option>
+      </select>
       <button id="refresh-news-btn" class="refresh-news-btn">
         <span id="refresh-btn-text">Get Latest News</span>
       </button>
@@ -249,6 +256,28 @@
       <button class="refresh-news-btn" onclick="window.location.href='/meltwater.html'" style="background:#2c5282">
         <span>Meltwater Dashboard</span>
       </button>
+    </div>
+
+    <!-- Custom Date Range Modal -->
+    <div id="custom-date-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center">
+      <div style="background:#fff;border-radius:16px;padding:24px;max-width:400px;width:90%">
+        <h3 style="margin:0 0 16px 0;font-size:18px">Select Custom Date Range</h3>
+        <p style="color:#ff9800;font-size:13px;margin:0 0 16px 0;padding:10px;background:#fff3e0;border-radius:8px">
+          ⚠️ Note: Only articles from the last 14 days are stored in memory
+        </p>
+        <div style="margin-bottom:12px">
+          <label style="display:block;margin-bottom:4px;font-weight:600">From:</label>
+          <input type="date" id="custom-date-from" style="width:100%;padding:10px;border:1px solid #d9e1ec;border-radius:8px"/>
+        </div>
+        <div style="margin-bottom:16px">
+          <label style="display:block;margin-bottom:4px;font-weight:600">To:</label>
+          <input type="date" id="custom-date-to" style="width:100%;padding:10px;border:1px solid #d9e1ec;border-radius:8px"/>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button onclick="applyCustomDateRange()" style="flex:1;background:#4a6741;color:#fff;border:none;padding:12px;border-radius:8px;font-weight:600;cursor:pointer">Apply</button>
+          <button onclick="closeCustomDateModal()" style="flex:1;background:#999;color:#fff;border:none;padding:12px;border-radius:8px;font-weight:600;cursor:pointer">Cancel</button>
+        </div>
+      </div>
     </div>
 
     <div id="err"></div>
@@ -384,6 +413,9 @@
     let currentFilter = 'all';
     let allMentions = [];
     let flaggedArticles = new Set(); // Track flagged article IDs
+    let currentDateRange = 7; // Default: last 7 days
+    let customDateFrom = null;
+    let customDateTo = null;
 
     async function loadMentions(){
       try{
@@ -413,6 +445,23 @@
             }
             return origin === currentFilter;
           });
+        }
+
+        // Apply date range filter
+        if (currentDateRange === 'custom' && customDateFrom && customDateTo) {
+          const fromDate = new Date(customDateFrom);
+          fromDate.setHours(0, 0, 0, 0);
+          const toDate = new Date(customDateTo);
+          toDate.setHours(23, 59, 59, 999);
+
+          filtered = filtered.filter(m => {
+            const pubDate = new Date(m.published);
+            return pubDate >= fromDate && pubDate <= toDate;
+          });
+        } else if (typeof currentDateRange === 'number') {
+          const cutoffDate = new Date();
+          cutoffDate.setDate(cutoffDate.getDate() - currentDateRange);
+          filtered = filtered.filter(m => new Date(m.published) >= cutoffDate);
         }
 
         // Apply search filter
@@ -473,6 +522,78 @@
     document.getElementById('search').addEventListener('input', ()=>{
       clearTimeout(window._t); window._t=setTimeout(loadMentions,250);
     });
+
+    // Date range filter event listener
+    document.getElementById('date-range').addEventListener('change', (e) => {
+      const value = e.target.value;
+      if (value === 'custom') {
+        openCustomDateModal();
+      } else {
+        currentDateRange = parseInt(value);
+        customDateFrom = null;
+        customDateTo = null;
+        loadMentions();
+      }
+    });
+
+    // Custom date range modal functions
+    function openCustomDateModal() {
+      const modal = document.getElementById('custom-date-modal');
+      modal.style.display = 'flex';
+
+      // Set default values (last 14 days)
+      const today = new Date();
+      const twoWeeksAgo = new Date();
+      twoWeeksAgo.setDate(today.getDate() - 14);
+
+      document.getElementById('custom-date-to').valueAsDate = today;
+      document.getElementById('custom-date-from').valueAsDate = twoWeeksAgo;
+    }
+
+    function closeCustomDateModal() {
+      const modal = document.getElementById('custom-date-modal');
+      modal.style.display = 'none';
+
+      // Reset select to previous value if user cancels
+      if (currentDateRange !== 'custom') {
+        document.getElementById('date-range').value = currentDateRange;
+      }
+    }
+
+    function applyCustomDateRange() {
+      const fromValue = document.getElementById('custom-date-from').value;
+      const toValue = document.getElementById('custom-date-to').value;
+
+      if (!fromValue || !toValue) {
+        alert('Please select both From and To dates');
+        return;
+      }
+
+      const fromDate = new Date(fromValue);
+      const toDate = new Date(toValue);
+
+      if (fromDate > toDate) {
+        alert('From date must be before To date');
+        return;
+      }
+
+      // Check if dates are within 14-day retention window
+      const fourteenDaysAgo = new Date();
+      fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
+
+      if (fromDate < fourteenDaysAgo) {
+        const proceed = confirm('Warning: You selected a date older than 14 days. Only articles from the last 14 days are available. Continue anyway?');
+        if (!proceed) return;
+      }
+
+      customDateFrom = fromValue;
+      customDateTo = toValue;
+      currentDateRange = 'custom';
+
+      closeCustomDateModal();
+      loadMentions();
+    }
+
     document.getElementById('refresh-news-btn').addEventListener('click', async () => {
       const btn = document.getElementById('refresh-news-btn');
       const btnText = document.getElementById('refresh-btn-text');

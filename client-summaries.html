@@ -58,11 +58,16 @@
   </header>
 
   <div class="wrap">
-    <h2 class="section-title">Saved Client Summaries</h2>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px">
+      <h2 class="section-title" style="margin:0">Saved Client Summaries</h2>
+      <button id="export-doc-btn" class="back-btn" style="background:#4a6741" onclick="exportToWord()">📄 Export to Word</button>
+    </div>
     <div id="loading" class="loading">Loading summaries...</div>
     <div id="summaries-container"></div>
   </div>
 
+  <!-- Load docx library for Word document generation -->
+  <script src="https://unpkg.com/docx@8.5.0/build/index.js"></script>
   <script>
     async function loadSummaries() {
       const loading = document.getElementById('loading');
@@ -208,6 +213,140 @@
       }).catch(err => {
         alert('Failed to copy: ' + err.message);
       });
+    }
+
+    async function exportToWord() {
+      try {
+        // Fetch summaries from API
+        const res = await fetch('/api/client_summaries', { method: 'GET' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        const data = await res.json();
+
+        if (!data.summaries || data.summaries.length === 0) {
+          alert('No summaries to export');
+          return;
+        }
+
+        // Build document sections
+        const children = [];
+
+        // Add document title
+        children.push(
+          new docx.Paragraph({
+            text: "Client Summaries",
+            heading: docx.HeadingLevel.TITLE,
+            spacing: { after: 400 }
+          })
+        );
+
+        // Add generation date
+        const today = new Date().toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        });
+        children.push(
+          new docx.Paragraph({
+            text: `Generated: ${today}`,
+            spacing: { after: 400 }
+          })
+        );
+
+        // Add each summary
+        data.summaries.forEach((summary, index) => {
+          // Format the summary text
+          let formattedSummary = summary.summary;
+          formattedSummary = formattedSummary.replace(/^\[([^\]]+)\]/, '$1');
+          const lines = formattedSummary.split('\n').filter(line => line.trim());
+
+          // Extract title (first line)
+          const titleLine = lines[0].trim();
+
+          // Get summary content (remove title, keep summary lines)
+          const summaryLines = lines.filter((line, i) => {
+            if (i === 0) return false; // Skip title
+            if (line.trim() === titleLine) return false; // Skip duplicate title
+            return line.length > 10; // Keep substantial content
+          });
+
+          // Add article title as heading
+          children.push(
+            new docx.Paragraph({
+              text: titleLine,
+              heading: docx.HeadingLevel.HEADING_2,
+              spacing: { before: 400, after: 200 }
+            })
+          );
+
+          // Add summary content
+          summaryLines.forEach(line => {
+            children.push(
+              new docx.Paragraph({
+                text: line,
+                spacing: { after: 100 }
+              })
+            );
+          });
+
+          // Add spacing between summaries
+          if (index < data.summaries.length - 1) {
+            children.push(
+              new docx.Paragraph({
+                text: "",
+                spacing: { after: 300 },
+                border: {
+                  bottom: {
+                    color: "CCCCCC",
+                    space: 1,
+                    style: docx.BorderStyle.SINGLE,
+                    size: 6
+                  }
+                }
+              })
+            );
+          }
+        });
+
+        // Create document
+        const doc = new docx.Document({
+          sections: [{
+            properties: {},
+            children: children
+          }]
+        });
+
+        // Generate and download
+        const blob = await docx.Packer.toBlob(doc);
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+
+        // Generate filename with current date
+        const filename = `client-summaries-${new Date().toISOString().split('T')[0]}.docx`;
+        link.download = filename;
+
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+
+        // Update button to show success
+        const btn = document.getElementById('export-doc-btn');
+        const originalText = btn.textContent;
+        btn.textContent = '✓ Exported!';
+        btn.style.background = '#4caf50';
+
+        setTimeout(() => {
+          btn.textContent = originalText;
+          btn.style.background = '#4a6741';
+        }, 2000);
+
+      } catch (error) {
+        alert(`Error exporting to Word: ${error.message}`);
+        console.error('Word export error:', error);
+      }
     }
 
     // Load summaries on page load

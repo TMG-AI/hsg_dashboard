@@ -169,17 +169,25 @@ export default async function handler(req, res) {
         const link = doc.content?.url || doc.url || doc.link || '#';
 
         // Extract summary from Meltwater v3 API
-        // The API doesn't provide a summary field - use matched.hit_sentence (keyword match snippet)
-        // or content.opening_text as fallback
-        let extractedSummary = doc.matched?.hit_sentence ||
+        // Based on actual API structure debugging, try all possible summary fields
+        let extractedSummary = doc.summary ||
+                              doc.description ||
+                              doc.snippet ||
+                              doc.content?.summary ||
+                              doc.content?.description ||
+                              doc.content?.snippet ||
+                              doc.matched?.hit_sentence ||
                               doc.content?.opening_text ||
                               doc.content?.byline ||
                               '';
 
         // Clean up the hit_sentence (remove leading "... " and trailing "...")
-        if (extractedSummary) {
-          extractedSummary = extractedSummary.replace(/^\.\.\.\s*/, '').replace(/\s*\.\.\.$/, '');
+        if (extractedSummary && typeof extractedSummary === 'string') {
+          extractedSummary = extractedSummary.replace(/^\.\.\.\s*/, '').replace(/\s*\.\.\.$/, '').trim();
         }
+
+        // Debug log to see what we actually got
+        console.log(`[Meltwater] Article "${title.substring(0, 50)}" - Summary length: ${extractedSummary.length}, Source: ${extractedSummary ? 'found' : 'MISSING'}`);
 
         const source = doc.source?.name || doc.source_name || doc.media?.name || 'Meltwater';
         const publishedDate = doc.published_date || doc.document?.published_date || doc.date || new Date().toISOString();

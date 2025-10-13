@@ -136,7 +136,7 @@ export default async function handler(req, res) {
     const data = await response.json();
 
     // FIXED: Meltwater v3 API returns data.result.documents, not data.results
-    const documents = data.result?.documents || [];
+    let documents = data.result?.documents || [];
 
     console.log(`Meltwater API v3 response:`, {
       status: response.status,
@@ -144,13 +144,21 @@ export default async function handler(req, res) {
       documentCount: documents.length
     });
 
-    // Debug: log first document's matched and content fields
-    if (documents.length > 0) {
-      const firstDoc = documents[0];
-      console.log('[Meltwater] First doc matched.hit_sentence:', firstDoc.matched?.hit_sentence);
-      console.log('[Meltwater] First doc content.opening_text:', firstDoc.content?.opening_text);
-      console.log('[Meltwater] First doc content.byline:', firstDoc.content?.byline);
+    // Sort by reach (descending) and limit to top 100
+    documents.sort((a, b) => {
+      const reachA = a.metrics?.reach || a.metrics?.circulation || 0;
+      const reachB = b.metrics?.reach || b.metrics?.circulation || 0;
+      return reachB - reachA; // Descending order
+    });
+
+    // Limit to top 100 articles by reach
+    const TOP_ARTICLES_LIMIT = 100;
+    if (documents.length > TOP_ARTICLES_LIMIT) {
+      console.log(`[Meltwater] Limiting from ${documents.length} to top ${TOP_ARTICLES_LIMIT} articles by reach`);
+      documents = documents.slice(0, TOP_ARTICLES_LIMIT);
     }
+
+    console.log(`[Meltwater] Processing ${documents.length} articles (sorted by reach)`);
 
     for (const doc of documents) {
       try {
@@ -185,9 +193,6 @@ export default async function handler(req, res) {
         if (extractedSummary && typeof extractedSummary === 'string') {
           extractedSummary = extractedSummary.replace(/^\.\.\.\s*/, '').replace(/\s*\.\.\.$/, '').trim();
         }
-
-        // Debug log to see what we actually got
-        console.log(`[Meltwater] Article "${title.substring(0, 50)}" - Summary length: ${extractedSummary.length}, Source: ${extractedSummary ? 'found' : 'MISSING'}`);
 
         const source = doc.source?.name || doc.source_name || doc.media?.name || 'Meltwater';
         const publishedDate = doc.published_date || doc.document?.published_date || doc.date || new Date().toISOString();

@@ -159,10 +159,36 @@ export default async function handler(req, res) {
         // Extract article data from Meltwater v3 API structure
         const title = doc.content?.title || doc.title || doc.headline || 'Untitled';
         const link = doc.content?.url || doc.url || doc.link || '#';
-        // Get full article text/summary (don't truncate)
-        const contentText = doc.content?.text || doc.content?.byline || doc.description || doc.snippet || '';
+
+        // Handle summary extraction - try multiple fields and handle both string and object
+        let extractedSummary = '';
+        if (doc.summary) {
+          if (typeof doc.summary === 'string') {
+            extractedSummary = doc.summary;
+          } else if (typeof doc.summary === 'object') {
+            // Try opening_text first, then other fields
+            extractedSummary = doc.summary.opening_text ||
+                               doc.summary.byline ||
+                               doc.summary.content ||
+                               doc.summary.text ||
+                               '';
+          }
+        }
+        // Fallback to other fields if no summary object
+        if (!extractedSummary) {
+          extractedSummary = doc.content?.text ||
+                            doc.content?.byline ||
+                            doc.description ||
+                            doc.snippet ||
+                            doc.document_opening_text ||
+                            '';
+        }
+
         const source = doc.source?.name || doc.source_name || doc.media?.name || 'Meltwater';
         const publishedDate = doc.document?.published_date || doc.published_date || doc.date || new Date().toISOString();
+
+        // Debug logging
+        console.log(`[Meltwater] Article: "${title}" | Summary length: ${extractedSummary.length} chars`);
 
         // Deduplicate
         const canon = normalizeUrl(link);
@@ -189,7 +215,7 @@ export default async function handler(req, res) {
           title: title,
           link: link,
           source: source,
-          summary: contentText,
+          summary: extractedSummary,
           origin: 'meltwater',
           published_ts: ts,
           published: new Date(ts * 1000).toISOString(),

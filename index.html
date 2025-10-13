@@ -1285,13 +1285,6 @@ ${articleText}`;
     eventSource.onopen = function() {
       console.log('Stream connected');
       reconnectAttempts = 0;
-
-      // Show live indicator
-      const indicator = document.createElement('div');
-      indicator.id = 'live-indicator';
-      indicator.innerHTML = 'LIVE';
-      indicator.style.cssText = 'position:fixed;top:20px;right:20px;background:#4caf50;color:white;padding:8px 16px;border-radius:20px;font-size:12px;font-weight:600;z-index:1000';
-      document.body.appendChild(indicator);
     };
 
     eventSource.onmessage = function(event) {
@@ -1306,13 +1299,6 @@ ${articleText}`;
     eventSource.onerror = function(error) {
       console.error('Stream error:', error);
       eventSource.close();
-
-      // Update indicator
-      const indicator = document.getElementById('live-indicator');
-      if (indicator) {
-        indicator.innerHTML = 'RECONNECTING...';
-        indicator.style.background = '#f44336';
-      }
 
       // Exponential backoff for reconnection
       reconnectAttempts++;

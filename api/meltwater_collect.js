@@ -144,11 +144,6 @@ export default async function handler(req, res) {
       documentCount: documents.length
     });
 
-    // Log first document structure for debugging
-    if (documents.length > 0) {
-      console.log('[Meltwater DEBUG] First document structure:', JSON.stringify(documents[0], null, 2));
-    }
-
     for (const doc of documents) {
       try {
         found++;
@@ -165,44 +160,21 @@ export default async function handler(req, res) {
         const title = doc.content?.title || doc.title || doc.headline || 'Untitled';
         const link = doc.content?.url || doc.url || doc.link || '#';
 
-        // Handle summary extraction - try multiple fields and handle both string and object
-        let extractedSummary = '';
+        // Extract summary from Meltwater v3 API
+        // The API doesn't provide a summary field - use matched.hit_sentence (keyword match snippet)
+        // or content.opening_text as fallback
+        let extractedSummary = doc.matched?.hit_sentence ||
+                              doc.content?.opening_text ||
+                              doc.content?.byline ||
+                              '';
 
-        // Debug: log what summary field looks like
-        console.log(`[Meltwater DEBUG] doc.summary type: ${typeof doc.summary}, value:`, doc.summary);
-
-        if (doc.summary) {
-          if (typeof doc.summary === 'string') {
-            extractedSummary = doc.summary;
-            console.log(`[Meltwater DEBUG] Used summary as string: ${extractedSummary.substring(0, 100)}`);
-          } else if (typeof doc.summary === 'object') {
-            // Try opening_text first, then other fields
-            extractedSummary = doc.summary.opening_text ||
-                               doc.summary.byline ||
-                               doc.summary.content ||
-                               doc.summary.text ||
-                               '';
-            console.log(`[Meltwater DEBUG] Extracted from summary object. Fields present:`, Object.keys(doc.summary));
-            console.log(`[Meltwater DEBUG] Extracted text: ${extractedSummary.substring(0, 100)}`);
-          }
-        }
-        // Fallback to other fields if no summary object
-        if (!extractedSummary) {
-          console.log(`[Meltwater DEBUG] No summary found, trying fallback fields...`);
-          extractedSummary = doc.content?.text ||
-                            doc.content?.byline ||
-                            doc.description ||
-                            doc.snippet ||
-                            doc.document_opening_text ||
-                            '';
-          console.log(`[Meltwater DEBUG] Fallback result: ${extractedSummary.substring(0, 100)}`);
+        // Clean up the hit_sentence (remove leading "... " and trailing "...")
+        if (extractedSummary) {
+          extractedSummary = extractedSummary.replace(/^\.\.\.\s*/, '').replace(/\s*\.\.\.$/, '');
         }
 
         const source = doc.source?.name || doc.source_name || doc.media?.name || 'Meltwater';
-        const publishedDate = doc.document?.published_date || doc.published_date || doc.date || new Date().toISOString();
-
-        // Debug logging
-        console.log(`[Meltwater] Article: "${title}" | Summary length: ${extractedSummary.length} chars`);
+        const publishedDate = doc.published_date || doc.document?.published_date || doc.date || new Date().toISOString();
 
         // Deduplicate
         const canon = normalizeUrl(link);

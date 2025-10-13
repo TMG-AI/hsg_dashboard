@@ -9,29 +9,24 @@
     body{
       font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;
       margin:0;
-      background:linear-gradient(135deg,#f8fffe 0%,#f1f8f6 100%);
+      background:#fafbfc;
       min-height:100vh;color:#1a1a1a
     }
     header{
-      background:linear-gradient(135deg,#4a6741 0%,#5a7c50 100%);
-      color:#fff;padding:24px 32px;box-shadow:0 4px 20px rgba(74,103,65,.15);
-      position:relative;overflow:hidden
+      background:#4a6741;
+      color:#fff;
     }
-    header::before{
-      content:'';position:absolute;inset:0;
-      background:url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M 10 0 L 0 0 0 10" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="0.5"/></pattern></defs><rect width="100" height="100" fill="url(%23grid)"/></svg>')
-    }
-    .header-content{position:relative;z-index:1;display:flex;align-items:center;justify-content:space-between}
-    .header-title{margin:0;font-size:28px;font-weight:600;letter-spacing:-.02em}
+    .header-content{max-width:1200px;margin:0 auto;padding:20px 32px;display:flex;align-items:center;justify-content:space-between}
+    .header-title{margin:0;font-size:32px;font-weight:700;letter-spacing:-.02em}
     .back-btn{background:rgba(255,255,255,.2);color:#fff;border:none;padding:10px 20px;border-radius:10px;font-weight:600;cursor:pointer;transition:.3s;text-decoration:none;display:inline-block}
     .back-btn:hover{background:rgba(255,255,255,.3);transform:translateY(-1px)}
 
     .wrap{max-width:1200px;margin:0 auto;padding:32px 24px}
-    .summary-card{background:#fff;border-radius:16px;box-shadow:0 4px 20px rgba(0,0,0,.08);padding:24px;margin-bottom:20px;border:1px solid rgba(139,195,74,.2);transition:.3s;position:relative}
+    .summary-card{background:#fff;border-radius:16px;box-shadow:0 4px 20px rgba(0,0,0,.12);padding:20px;margin-bottom:16px;border:1px solid rgba(139,195,74,.2);transition:.3s;position:relative}
     .summary-card:hover{transform:translateY(-2px);box-shadow:0 8px 30px rgba(0,0,0,.12)}
     .summary-card::before{content:'';position:absolute;top:0;left:0;width:100%;height:4px;background:linear-gradient(90deg,#8bc34a,#7cb342);border-radius:16px 16px 0 0}
-    .summary-title{font-size:20px;font-weight:700;color:#1a1a1a;margin:0 0 16px 0;line-height:1.4}
-    .summary-text{color:#333;font-size:15px;line-height:1.7;white-space:pre-wrap}
+    .summary-title{font-size:17px;font-weight:700;color:#1a1a1a;margin:0 0 16px 0;line-height:1.4;letter-spacing:-.01em}
+    .summary-text{color:#333;font-size:13px;line-height:1.7;white-space:pre-wrap}
     .summary-meta{color:#666;font-size:13px;margin-top:16px;padding-top:16px;border-top:1px solid rgba(139,195,74,.2);display:flex;align-items:center;justify-content:space-between}
     .delete-btn{background:#d32f2f;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;transition:.3s}
     .delete-btn:hover{background:#c62828;transform:translateY(-1px)}
@@ -44,8 +39,8 @@
     .loading::before{content:'';width:20px;height:20px;border:2px solid rgba(139,195,74,.3);border-top:2px solid #8bc34a;border-radius:50%;animation:spin 1s linear infinite;margin-right:12px}
     @keyframes spin{0%{transform:rotate(0)}100%{transform:rotate(360deg)}}
 
-    .section-title{font-size:24px;font-weight:700;color:#1a1a1a;margin:0 0 24px 0;display:flex;align-items:center;gap:12px}
-    .section-title::before{content:'';width:4px;height:24px;background:linear-gradient(135deg,#8bc34a,#7cb342);border-radius:2px}
+    .section-title{font-size:17px;font-weight:700;color:#1a1a1a;margin:0 0 24px 0;display:flex;align-items:center;gap:12px;letter-spacing:-.01em}
+    .section-title::before{content:'';width:4px;height:20px;background:linear-gradient(135deg,#8bc34a,#7cb342);border-radius:2px}
   </style>
 </head>
 <body>

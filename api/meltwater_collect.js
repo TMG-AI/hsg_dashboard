@@ -167,9 +167,14 @@ export default async function handler(req, res) {
 
         // Handle summary extraction - try multiple fields and handle both string and object
         let extractedSummary = '';
+
+        // Debug: log what summary field looks like
+        console.log(`[Meltwater DEBUG] doc.summary type: ${typeof doc.summary}, value:`, doc.summary);
+
         if (doc.summary) {
           if (typeof doc.summary === 'string') {
             extractedSummary = doc.summary;
+            console.log(`[Meltwater DEBUG] Used summary as string: ${extractedSummary.substring(0, 100)}`);
           } else if (typeof doc.summary === 'object') {
             // Try opening_text first, then other fields
             extractedSummary = doc.summary.opening_text ||
@@ -177,16 +182,20 @@ export default async function handler(req, res) {
                                doc.summary.content ||
                                doc.summary.text ||
                                '';
+            console.log(`[Meltwater DEBUG] Extracted from summary object. Fields present:`, Object.keys(doc.summary));
+            console.log(`[Meltwater DEBUG] Extracted text: ${extractedSummary.substring(0, 100)}`);
           }
         }
         // Fallback to other fields if no summary object
         if (!extractedSummary) {
+          console.log(`[Meltwater DEBUG] No summary found, trying fallback fields...`);
           extractedSummary = doc.content?.text ||
                             doc.content?.byline ||
                             doc.description ||
                             doc.snippet ||
                             doc.document_opening_text ||
                             '';
+          console.log(`[Meltwater DEBUG] Fallback result: ${extractedSummary.substring(0, 100)}`);
         }
 
         const source = doc.source?.name || doc.source_name || doc.media?.name || 'Meltwater';

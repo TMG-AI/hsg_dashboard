@@ -8,12 +8,9 @@ export default async function handler(req, res) {
       return res.status(200).json({ error: "MELTWATER_API_KEY not configured" });
     }
 
-    // Fetch from last 24 hours
-    const now = new Date();
-    const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-
-    const startDate = yesterday.toISOString().replace(/\.\d{3}Z$/, '');
-    const endDate = now.toISOString().replace(/\.\d{3}Z$/, '');
+    // Fetch from a known past date range (last week)
+    const startDate = '2024-10-06T00:00:00';
+    const endDate = '2024-10-13T23:59:59';
 
     const requestBody = {
       start: startDate,

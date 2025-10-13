@@ -159,6 +159,7 @@ export default async function handler(req, res) {
         // Extract article data from Meltwater v3 API structure
         const title = doc.content?.title || doc.title || doc.headline || 'Untitled';
         const link = doc.content?.url || doc.url || doc.link || '#';
+        // Get full article text/summary (don't truncate)
         const contentText = doc.content?.text || doc.content?.byline || doc.description || doc.snippet || '';
         const source = doc.source?.name || doc.source_name || doc.media?.name || 'Meltwater';
         const publishedDate = doc.document?.published_date || doc.published_date || doc.date || new Date().toISOString();
@@ -188,7 +189,7 @@ export default async function handler(req, res) {
           title: title,
           link: link,
           source: source,
-          summary: contentText.substring(0, 500),
+          summary: contentText,
           origin: 'meltwater',
           published_ts: ts,
           published: new Date(ts * 1000).toISOString(),

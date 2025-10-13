@@ -187,9 +187,14 @@
     </div>
   </div>
 
-  <!-- Last Updated Timestamp -->
-  <div style="text-align:center;margin:12px auto 0 auto;max-width:1200px">
-    <p style="color:#666;font-size:13px;margin:0" id="last-updated-text">Last updated: —</p>
+  <!-- Last Updated and Meltwater Button -->
+  <div style="text-align:center;margin:16px auto;max-width:1200px;display:flex;align-items:center;justify-content:center;gap:20px;flex-wrap:wrap">
+    <div style="background:#fff;padding:10px 20px;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.08);border:1px solid rgba(139,195,74,.2)">
+      <p style="color:#666;font-size:13px;margin:0;font-weight:500" id="last-updated-text">Last updated: —</p>
+    </div>
+    <button id="meltwater-nav-btn" onclick="window.location.href='/meltwater.html'" style="background:linear-gradient(135deg,#2c5282,#3b6ba6);color:#fff;border:none;padding:10px 20px;border-radius:12px;font-weight:600;cursor:pointer;transition:.3s;font-size:14px;box-shadow:0 2px 8px rgba(44,82,130,.3)" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 12px rgba(44,82,130,.4)'" onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 2px 8px rgba(44,82,130,.3)'">
+      📊 Meltwater Dashboard
+    </button>
   </div>
 
 <!-- Active Spikes (Meltwater) -->
@@ -252,9 +257,6 @@
       </button>
       <button class="refresh-news-btn" onclick="window.location.href='/client-summaries.html'">
         <span>Client Summaries</span>
-      </button>
-      <button class="refresh-news-btn" onclick="window.location.href='/meltwater.html'" style="background:#2c5282">
-        <span>Meltwater Dashboard</span>
       </button>
     </div>
 

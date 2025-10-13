@@ -178,6 +178,12 @@
       </div>
     </div>
   </div>
+
+  <!-- Last Updated Timestamp -->
+  <div style="text-align:center;margin:12px auto 0 auto;max-width:1200px">
+    <p style="color:#666;font-size:13px;margin:0" id="meltwater-last-updated">Last updated: —</p>
+  </div>
+
 <!-- Active Spikes (Meltwater) -->
 <div class="spike-section" id="spike-section" style="display:none">
   <h2 class="section-title" style="margin-top:6px">Active Spikes (Today)</h2>
@@ -862,6 +868,39 @@ ${articleText}`;
 
     } catch(e) {
       console.error('Error loading Meltwater summary:', e);
+    }
+  })();
+  </script>
+
+  <!-- Last Updated timestamp loader for Meltwater -->
+  <script>
+  (async function(){
+    try{
+      const res = await fetch('/api/meltwater_summary', { cache: 'no-store' });
+      if (!res.ok) throw new Error('HTTP '+res.status);
+      const data = await res.json();
+
+      if (data.mentions && data.mentions.length > 0) {
+        // Get the most recent article's timestamp
+        const mostRecent = data.mentions[0];
+        const timestamp = new Date(mostRecent.published);
+
+        // Format in Eastern Time
+        const etTime = timestamp.toLocaleString('en-US', {
+          timeZone: 'America/New_York',
+          month: 'numeric',
+          day: 'numeric',
+          year: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true
+        });
+
+        const el = document.getElementById('meltwater-last-updated');
+        if (el) el.textContent = `Last updated: ${etTime} ET`;
+      }
+    } catch(e) {
+      console.error('Error loading Meltwater last updated time:', e);
     }
   })();
   </script>

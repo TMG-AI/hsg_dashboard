@@ -21,7 +21,7 @@ export default async function handler(req, res) {
       template: {
         name: "api.json"
       },
-      page_size: 1  // Just get one article
+      page_size: 10  // Get 10 articles to see variation
     };
 
     const response = await fetch(`https://api.meltwater.com/v3/search/${MELTWATER_SEARCH_ID}`, {

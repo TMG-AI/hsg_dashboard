@@ -233,15 +233,15 @@ function extractKeywords(doc) {
     keywords.push(...doc.tags);
   }
   
-  // Extract crypto-related keywords from content
+  // Extract China-related keywords from content
   const content = (doc.content || '').toLowerCase();
-  const cryptoKeywords = [
-    'bitcoin', 'btc', 'ethereum', 'eth', 
-    'crypto', 'cryptocurrency', 'blockchain',
-    'coinbase', 'defi', 'nft', 'web3'
+  const chinaKeywords = [
+    'china', 'chinese', 'beijing', 'xi jinping',
+    'ccp', 'taiwan', 'hong kong', 'trade war',
+    'tariffs', 'sanctions'
   ];
-  
-  cryptoKeywords.forEach(keyword => {
+
+  chinaKeywords.forEach(keyword => {
     if (content.includes(keyword)) {
       keywords.push(keyword);
     }

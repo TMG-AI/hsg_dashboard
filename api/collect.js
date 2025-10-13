@@ -43,23 +43,6 @@ const RSS_FEEDS = (process.env.RSS_FEEDS || "").split(/[,;]/).map(s => s.trim())
 const KEYWORDS  = (process.env.KEYWORDS  || "").split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
 const URGENT    = (process.env.ALERT_KEYWORDS_URGENT || "").split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
 
-// ---- section rules ----
-const SECTION_RULES = {
-  "coindesk.com": "Top Crypto News",
-  "theblock.co": "Top Crypto News",
-  "cointelegraph.com": "Top Crypto News",
-  "decrypt.co": "Top Crypto News",
-  "blockworks.co": "Top Crypto News",
-  "news.bitcoin.com": "Major Sources",
-  "crypto.news": "Major Sources",
-  "newsbtc.com": "Major Sources",
-  "u.today": "Major Sources",
-  "bitcoinist.com": "Major Sources",
-  "99bitcoins.com": "Major Sources",
-  "cryptopanic.com": "Aggregators",
-  "bitcoinnews.com": "Specialized",
-};
-
 // ---- helpers ----
 function normalizeUrl(u) {
   try {
@@ -78,15 +61,6 @@ function normalizeUrl(u) {
 }
 function hostOf(u) { try { return new URL(u).hostname.toLowerCase(); } catch { return ""; } }
 function normalizeHost(h) { return (h || "").toLowerCase().replace(/^www\./, "").replace(/^amp\./, ""); }
-function sectionFor(link, fallback) {
-  const raw = hostOf(link);
-  const host = normalizeHost(raw);
-  for (const [key, sec] of Object.entries(SECTION_RULES)) {
-    if (host === key || host.endsWith("." + key)) return sec;
-  }
-  if ((fallback || "").toLowerCase().includes("bitcoin")) return "Major Sources";
-  return "Other";
-}
 function unwrapGoogleAlert(u) {
   try {
     const url = new URL(u);
@@ -204,12 +178,11 @@ export default async function handler(req, res) {
           await redis.sadd(SEEN_ID, mid);
 
           const ts = toEpoch(e.isoDate || e.pubDate || e.published || e.updated);
-          const section = sectionFor(link, feedTitle);
 
           const m = {
             id: mid,
             canon,
-            section: section,
+            section: "Google Alerts",
             title: title || "(untitled)",
             link,
             source: displaySource(link, feedTitle),

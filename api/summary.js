@@ -42,32 +42,6 @@ function toObj(x) {
   try { return JSON.parse(String(x)); } catch { return null; }
 }
 
-function safeHost(u) { 
-  try { 
-    const url = new URL(u);
-    return url.hostname.toLowerCase().replace(/^www\./, '');
-  } catch { 
-    return ""; 
-  }
-}
-
-/* RSS hosts */
-const RSS_HOSTS = new Set([
-  "coindesk.com",
-  "theblock.co",
-  "cointelegraph.com",
-  "decrypt.co",
-  "blockworks.co",
-  "news.bitcoin.com",
-  "crypto.news",
-  "newsbtc.com",
-  "u.today",
-  "cryptopanic.com",
-  "bitcoinist.com",
-  "99bitcoins.com",
-  "bitcoinnews.com",
-]);
-
 function detectOrigin(m) {
   // Check explicit origin field first
   if (m && typeof m.origin === "string" && m.origin && m.origin !== "") {
@@ -94,18 +68,15 @@ function detectOrigin(m) {
     return "meltwater";
   }
 
-  // Check if it's RSS based on host
-  const host = safeHost(m?.link || m?.canon || "");
-  if (host && RSS_HOSTS.has(host)) return "rss";
-
-  // Check section indicators for RSS
-  const section = (m?.section || "").toLowerCase();
-  if (section.includes("top crypto news") ||
-      section.includes("major sources") ||
-      section.includes("aggregators")) {
-    return "rss";
+  // Check for Congress indicators
+  if (
+    m?.section === "Congress" ||
+    (m?.id && m.id.startsWith("congress_"))
+  ) {
+    return "congress";
   }
 
+  // Default to google_alerts for all other articles
   return "google_alerts";
 }
 

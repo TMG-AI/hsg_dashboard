@@ -40,8 +40,6 @@ const MAX_MENTIONS = 5000;
 // ---- config ----
 // Support both comma and semicolon delimiters for RSS_FEEDS
 const RSS_FEEDS = (process.env.RSS_FEEDS || "").split(/[,;]/).map(s => s.trim()).filter(Boolean);
-const KEYWORDS  = (process.env.KEYWORDS  || "").split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
-const URGENT    = (process.env.ALERT_KEYWORDS_URGENT || "").split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
 
 // ---- helpers ----
 function normalizeUrl(u) {
@@ -99,8 +97,6 @@ function extractItemLink(e) {
   }
   return (raw || "").trim();
 }
-function matchKeywords(text) { const t = (text || "").toLowerCase(); return KEYWORDS.filter(k => t.includes(k)); }
-function isUrgent(m) { if (!URGENT.length) return false; const set = new Set(m.map(x => x.toLowerCase())); return URGENT.some(u => set.has(u)); }
 function idFromCanonical(c) { let h=0; for (let i=0;i<c.length;i++) h=(h*31+c.charCodeAt(i))>>>0; return `m_${h.toString(16)}`; }
 function toEpoch(d){ const t=Date.parse(d); return Number.isFinite(t)?Math.floor(t/1000):Math.floor(Date.now()/1000); }
 const ENABLE_SENTIMENT = (process.env.ENABLE_SENTIMENT || "").toLowerCase() === "true";
@@ -123,7 +119,6 @@ async function sendEmail(m){
     subject: `[URGENT] ${m.title}`,
     html: `<p><b>${m.title}</b></p>
            <p>Source: ${m.source} · ${m.published}</p>
-           <p>Keywords: ${m.matched.join(", ")}</p>
            <p>Section: ${m.section}</p>
            <p><a href="${m.link}">Open article</a></p>`
   });
@@ -165,9 +160,6 @@ export default async function handler(req, res) {
           const link = extractItemLink(e);
 
           // No keyword filtering - accept all articles
-          let matched = KEYWORDS.length > 0 ? matchKeywords(`${title}\n${sum}\n${feedTitle}\n${link}`) : ["google-alert"];
-          if (!matched.length) matched = ["google-alert"]; // Always include
-
           const canon = normalizeUrl(link || title);
           if (!canon) continue;
 
@@ -186,7 +178,6 @@ export default async function handler(req, res) {
             title: title || "(untitled)",
             link,
             source: displaySource(link, feedTitle),
-            matched: matched,
             summary: sum,
             origin: "google_alerts",
             published_ts: ts,
@@ -199,7 +190,6 @@ export default async function handler(req, res) {
           const count = await redis.zcard(ZSET);
           if (count > MAX_MENTIONS) await redis.zremrangebyrank(ZSET, 0, count - MAX_MENTIONS - 1);
 
-          if (isUrgent(matched)) { try { await sendEmail(m); emailed++; } catch {} }
           found++; stored++;
         }
       } catch (err) {

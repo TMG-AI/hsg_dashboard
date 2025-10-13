@@ -189,7 +189,6 @@ export default async function handler(req, res) {
             link: finalLink,
             source: feedTitle, // Use newsletter name directly as source
             provider: feedTitle,
-            matched: ["newsletter", ...matched],
             summary: sum,
             origin: "newsletter", // Use consistent "newsletter" origin (not "newsletter_rss")
             published_ts: ts,

@@ -1091,9 +1091,7 @@ ${articleText}`;
       div.className = 'card new-mention';
       div.setAttribute('data-mention-id', mention.id);
       div.style.cssText = 'animation:slideInNew 0.5s ease forwards;border:2px solid #4caf50';
-      
-      const chips = (mention.matched || []).map(k => `<span class="chip">${k}</span>`).join('');
-      
+
       div.innerHTML = `
         <div class="card-content">
           <span style="position:absolute;top:10px;right:10px;background:#4caf50;color:white;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600">NEW</span>
@@ -1101,7 +1099,6 @@ ${articleText}`;
           <div class="meta">
             <div><span class="source-name"></span> · Just now</div>
           </div>
-          ${chips ? `<div class="chip-container">${chips}</div>` : ''}
         </div>
       `;
 

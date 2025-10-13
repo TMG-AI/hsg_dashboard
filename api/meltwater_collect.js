@@ -71,40 +71,6 @@ function normalizeSentiment(doc) {
   return undefined;
 }
 
-function extractKeywords(doc) {
-  const keywords = [];
-
-  if (doc.source_type) keywords.push(doc.source_type);
-  if (doc.sentiment) keywords.push(`sentiment-${doc.sentiment.toLowerCase()}`);
-  if (doc.country) keywords.push(doc.country);
-  if (doc.language) keywords.push(doc.language);
-
-  // Add tags if present
-  if (doc.tags && Array.isArray(doc.tags)) {
-    keywords.push(...doc.tags);
-  }
-
-  // Extract China-related keywords from content
-  // Note: doc.content is an object in v3 API, extract text from it
-  const contentText = doc.content?.text || doc.content?.title || doc.content?.byline || '';
-  const titleText = doc.content?.title || doc.title || '';
-  const searchText = (contentText + ' ' + titleText).toLowerCase();
-
-  const chinaKeywords = ['china', 'chinese', 'beijing', 'xi jinping', 'ccp'];
-
-  chinaKeywords.forEach(keyword => {
-    if (searchText.includes(keyword)) {
-      keywords.push(keyword);
-    }
-  });
-
-  // Add source type
-  if (doc.source_type) {
-    keywords.push(`type-${doc.source_type.toLowerCase()}`);
-  }
-
-  return [...new Set(keywords)]; // Remove duplicates
-}
 
 export default async function handler(req, res) {
   // Load environment variables inside handler for better reliability
@@ -222,7 +188,6 @@ export default async function handler(req, res) {
           title: title,
           link: link,
           source: source,
-          matched: extractKeywords(doc),
           summary: contentText.substring(0, 500),
           origin: 'meltwater',
           published_ts: ts,

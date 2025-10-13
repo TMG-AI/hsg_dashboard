@@ -142,7 +142,6 @@ export default async function handler(req, res) {
           origin: 'meltwater',
           published: doc.published_date || new Date().toISOString(),
           published_ts: doc.published_date ? Math.floor(Date.parse(doc.published_date) / 1000) : timestamp,
-          matched: extractKeywords(doc),
           summary: extractedSummary,
           reach: doc.metrics?.reach || doc.metrics?.circulation || 0,
           sentiment: normalizeSentiment(doc),
@@ -220,40 +219,6 @@ function normalizeSentiment(doc) {
   return undefined;
 }
 
-function extractKeywords(doc) {
-  const keywords = [];
-  
-  if (doc.source_type) keywords.push(doc.source_type);
-  if (doc.sentiment) keywords.push(`sentiment-${doc.sentiment.toLowerCase()}`);
-  if (doc.country) keywords.push(doc.country);
-  if (doc.language) keywords.push(doc.language);
-  
-  // Add tags if present
-  if (doc.tags && Array.isArray(doc.tags)) {
-    keywords.push(...doc.tags);
-  }
-  
-  // Extract China-related keywords from content
-  const content = (doc.content || '').toLowerCase();
-  const chinaKeywords = [
-    'china', 'chinese', 'beijing', 'xi jinping',
-    'ccp', 'taiwan', 'hong kong', 'trade war',
-    'tariffs', 'sanctions'
-  ];
-
-  chinaKeywords.forEach(keyword => {
-    if (content.includes(keyword)) {
-      keywords.push(keyword);
-    }
-  });
-  
-  // Add source type
-  if (doc.source_type) {
-    keywords.push(`type-${doc.source_type.toLowerCase()}`);
-  }
-  
-  return [...new Set(keywords)]; // Remove duplicates
-}
 
 // Optional: Notify connected clients of new mentions
 async function notifyClients(mentions) {

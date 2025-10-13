@@ -144,6 +144,11 @@ export default async function handler(req, res) {
       documentCount: documents.length
     });
 
+    // Log first document structure for debugging
+    if (documents.length > 0) {
+      console.log('[Meltwater DEBUG] First document structure:', JSON.stringify(documents[0], null, 2));
+    }
+
     for (const doc of documents) {
       try {
         found++;

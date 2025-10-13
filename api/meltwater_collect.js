@@ -144,6 +144,14 @@ export default async function handler(req, res) {
       documentCount: documents.length
     });
 
+    // Debug: log first document's matched and content fields
+    if (documents.length > 0) {
+      const firstDoc = documents[0];
+      console.log('[Meltwater] First doc matched.hit_sentence:', firstDoc.matched?.hit_sentence);
+      console.log('[Meltwater] First doc content.opening_text:', firstDoc.content?.opening_text);
+      console.log('[Meltwater] First doc content.byline:', firstDoc.content?.byline);
+    }
+
     for (const doc of documents) {
       try {
         found++;

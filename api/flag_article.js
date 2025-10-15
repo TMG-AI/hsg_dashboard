@@ -7,11 +7,12 @@ const redis = new Redis({
 });
 
 const FLAGGED_SET = "articles:flagged";
+const ZSET = "mentions:z"; // Main articles sorted set
 
 export default async function handler(req, res) {
   try {
     if (req.method === "POST") {
-      // Flag an article
+      // Flag an article - get full article data from main ZSET
       const { article_id, title, link, source } = req.body;
 
       if (!article_id) {
@@ -20,11 +21,32 @@ export default async function handler(req, res) {
 
       console.log(`POST: Flagging article_id: "${article_id}" (type: ${typeof article_id})`);
 
-      const flaggedArticle = {
+      // Fetch the full article from main mentions ZSET
+      const allArticles = await redis.zrange(ZSET, 0, 10000, { rev: true });
+      let fullArticle = null;
+
+      for (const item of allArticles) {
+        try {
+          const parsed = typeof item === 'string' ? JSON.parse(item) : item;
+          if (parsed && parsed.id === article_id) {
+            fullArticle = parsed;
+            break;
+          }
+        } catch (e) {
+          console.error('Error parsing article:', e);
+        }
+      }
+
+      // If we found the full article, use it; otherwise use provided metadata
+      const flaggedArticle = fullArticle ? {
+        ...fullArticle,
+        flagged_at: new Date().toISOString()
+      } : {
         id: article_id,
         title: title || "Unknown",
         link: link || "#",
         source: source || "Unknown",
+        published: new Date().toISOString(),
         flagged_at: new Date().toISOString()
       };
 

@@ -1051,33 +1051,50 @@ ${articleText}`;
     }
 
     // Show only flagged articles
-    function showFlaggedArticles() {
-      if (flaggedArticles.size === 0) {
-        alert('No articles have been flagged yet');
-        return;
-      }
-
-      // Filter to show only flagged articles
+    async function showFlaggedArticles() {
       const list = document.getElementById('list');
-      list.innerHTML = '';
 
-      const flaggedItems = allMentions.filter(m => flaggedArticles.has(m.id));
+      try {
+        // Show loading
+        showLoadingSkeletons(3);
 
-      if (flaggedItems.length === 0) {
+        // Fetch flagged articles from API (not from local cache)
+        const res = await fetch('/api/flag_article', { method: 'GET' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        const data = await res.json();
+
+        removeLoadingSkeletons();
+
+        if (!data.ok || !data.articles || data.articles.length === 0) {
+          list.innerHTML = `
+            <div class="empty-state">
+              <div class="empty-state-icon"></div>
+              <h3>No flagged articles</h3>
+              <p>Flag articles by checking the checkbox next to them.</p>
+              <button class="action-btn" onclick="loadMentions()">Show All Articles</button>
+            </div>`;
+          return;
+        }
+
+        // Clear list and display flagged articles
+        list.innerHTML = '';
+        document.getElementById('err').style.display = 'none';
+
+        for (let i = 0; i < data.articles.length; i++) {
+          await addArticleCard(list, data.articles[i], i * 0.05);
+        }
+
+      } catch (error) {
+        removeLoadingSkeletons();
         list.innerHTML = `
           <div class="empty-state">
             <div class="empty-state-icon"></div>
-            <h3>No flagged articles found</h3>
-            <p>The flagged articles may not be in the current view.</p>
+            <h3>Error loading flagged articles</h3>
+            <p>${error.message}</p>
             <button class="action-btn" onclick="loadMentions()">Show All Articles</button>
           </div>`;
-        return;
-      }
-
-      document.getElementById('err').style.display = 'none';
-
-      for (let i = 0; i < flaggedItems.length; i++) {
-        addArticleCard(list, flaggedItems[i], i * 0.05);
+        console.error('Error loading flagged articles:', error);
       }
     }
 

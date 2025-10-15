@@ -1052,6 +1052,7 @@ ${articleText}`;
 
     // Show only flagged articles
     async function showFlaggedArticles() {
+      console.log('showFlaggedArticles called');
       const list = document.getElementById('list');
 
       try {
@@ -1097,6 +1098,9 @@ ${articleText}`;
         console.error('Error loading flagged articles:', error);
       }
     }
+
+    // Make function globally accessible
+    window.showFlaggedArticles = showFlaggedArticles;
 
     // Initialize
     loadFlaggedArticles().then(() => loadMentions());

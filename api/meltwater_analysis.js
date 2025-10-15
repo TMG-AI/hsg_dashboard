@@ -122,23 +122,32 @@ function extractKeyEntities(text) {
 // Calculate content similarity based on key entities and topics
 function calculateContentSimilarity(article1, article2) {
   // Combine title and summary for both articles
-  const text1 = `${article1.title || ''} ${article1.summary || ''}`;
-  const text2 = `${article2.title || ''} ${article2.summary || ''}`;
+  // Clean HTML entities and tags first
+  const cleanText = (text) => {
+    if (!text) return '';
+    // Decode HTML entities
+    return text
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/&nbsp;/g, ' ')
+      // Remove HTML tags
+      .replace(/<[^>]+>/g, ' ')
+      // Clean up extra spaces
+      .replace(/\s+/g, ' ')
+      .trim();
+  };
+
+  const text1 = cleanText(`${article1.title || ''} ${article1.summary || ''}`);
+  const text2 = cleanText(`${article2.title || ''} ${article2.summary || ''}`);
 
   // Extract entities from both
   const entities1 = extractKeyEntities(text1);
   const entities2 = extractKeyEntities(text2);
 
-  if (entities1.size === 0 && entities2.size === 0) return 0;
-  if (entities1.size === 0 || entities2.size === 0) return 0;
-
-  // Calculate Jaccard similarity on entities
-  const intersection = new Set([...entities1].filter(e => entities2.has(e)));
-  const union = new Set([...entities1, ...entities2]);
-
-  const entitySimilarity = intersection.size / union.size;
-
-  // Also do basic word overlap for additional context
+  // Calculate word-level similarity as fallback
   const words1 = new Set(normalizeText(text1).split(" ").filter(w => w.length > 3));
   const words2 = new Set(normalizeText(text2).split(" ").filter(w => w.length > 3));
 
@@ -146,6 +155,19 @@ function calculateContentSimilarity(article1, article2) {
   const wordUnion = new Set([...words1, ...words2]);
 
   const wordSimilarity = wordUnion.size > 0 ? wordIntersection.size / wordUnion.size : 0;
+
+  // If both articles have sparse/no entities (short summaries), rely primarily on word similarity
+  if (entities1.size <= 2 || entities2.size <= 2) {
+    // For sparse entity extraction, use word similarity more heavily
+    // This handles Google Alerts with short summaries
+    return wordSimilarity;
+  }
+
+  // Calculate Jaccard similarity on entities
+  const intersection = new Set([...entities1].filter(e => entities2.has(e)));
+  const union = new Set([...entities1, ...entities2]);
+
+  const entitySimilarity = union.size > 0 ? intersection.size / union.size : 0;
 
   // Weight entity similarity higher (70%) than word similarity (30%)
   // Because entities capture the key subjects/topics being discussed

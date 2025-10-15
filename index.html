@@ -1078,6 +1078,16 @@ ${articleText}`;
           return;
         }
 
+        // SYNC client-side Set with backend data to ensure checkboxes match
+        flaggedArticles.clear();
+        data.articles.forEach(article => {
+          flaggedArticles.add(article.id);
+        });
+        console.log(`Synced flaggedArticles Set: ${flaggedArticles.size} articles`);
+
+        // Update flagged count
+        updateFlaggedCount();
+
         // Clear list and display flagged articles
         list.innerHTML = '';
         document.getElementById('err').style.display = 'none';

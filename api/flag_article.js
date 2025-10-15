@@ -6,7 +6,8 @@ const redis = new Redis({
   token: process.env.STORAGE_KV_REST_API_TOKEN,
 });
 
-const FLAGGED_SET = "articles:flagged";
+const FLAGGED_SET = "articles:flagged:ids"; // Set of article IDs only
+const FLAGGED_HASH = "articles:flagged:data"; // Hash of article data by ID
 const ZSET = "mentions:z"; // Main articles sorted set
 
 export default async function handler(req, res) {
@@ -60,8 +61,10 @@ export default async function handler(req, res) {
 
       console.log(`POST: Storing flagged article (first 300 chars):`, JSON.stringify(flaggedArticle).substring(0, 300));
 
-      // Upstash Redis automatically serializes objects, so pass the object directly
-      const saddResult = await redis.sadd(FLAGGED_SET, flaggedArticle);
+      // Store article ID in Set and full data in Hash
+      const saddResult = await redis.sadd(FLAGGED_SET, article_id);
+      await redis.hset(FLAGGED_HASH, article_id, JSON.stringify(flaggedArticle));
+
       console.log(`POST: SADD result: ${saddResult} (1 = new member, 0 = already existed)`);
 
       // Verify it was added
@@ -82,79 +85,56 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: "article_id is required" });
       }
 
-      // Get all flagged articles
-      const flagged = await redis.smembers(FLAGGED_SET);
+      console.log(`DELETE: Unflagging article_id: "${article_id}" (type: ${typeof article_id})`);
 
-      console.log(`DELETE: Looking for article_id: "${article_id}" (type: ${typeof article_id})`);
-      console.log(`DELETE: Found ${flagged.length} flagged articles in Redis`);
+      // Remove from both Set and Hash
+      const sremResult = await redis.srem(FLAGGED_SET, article_id);
+      const hdelResult = await redis.hdel(FLAGGED_HASH, article_id);
 
-      // Find and remove the matching one
-      let removed = false;
-      for (const item of flagged) {
-        try {
-          // Handle both objects and strings
-          let parsed;
-          if (typeof item === 'string') {
-            parsed = JSON.parse(item);
-          } else {
-            parsed = item;
-          }
-
-          console.log(`DELETE: Comparing with parsed.id: "${parsed.id}" (type: ${typeof parsed.id}), match: ${parsed.id === article_id}`);
-
-          if (parsed.id === article_id) {
-            const result = await redis.srem(FLAGGED_SET, item);
-            removed = true;
-            console.log(`Unflagged article ${article_id}, srem result:`, result);
-            return res.status(200).json({
-              ok: true,
-              message: "Article unflagged",
-              article_id
-            });
-          }
-        } catch (e) {
-          console.error('Error parsing flagged item:', e);
-        }
-      }
-
-      // If we didn't find it, still return success since the desired state (unflagged) is achieved
-      console.log(`Article ${article_id} not found in flagged set (already unflagged or never flagged)`);
+      console.log(`DELETE: SREM result: ${sremResult}, HDEL result: ${hdelResult}`);
 
       return res.status(200).json({
         ok: true,
-        message: "Article was not flagged (no action needed)",
+        message: sremResult > 0 ? "Article unflagged" : "Article was not flagged (no action needed)",
         article_id,
-        already_unflagged: true
+        removed: sremResult > 0
       });
 
     } else if (req.method === "GET") {
       // Get all flagged articles
-      console.log(`GET: Fetching flagged articles from Redis set: ${FLAGGED_SET}`);
+      console.log(`GET: Fetching flagged articles from Redis`);
 
-      const flagged = await redis.smembers(FLAGGED_SET);
-      console.log(`GET: Retrieved ${flagged.length} items from Redis`);
-      console.log(`GET: First item type:`, typeof flagged[0]);
-      console.log(`GET: First item sample:`, JSON.stringify(flagged[0])?.substring(0, 200));
+      // Get all article IDs from Set
+      const articleIds = await redis.smembers(FLAGGED_SET);
+      console.log(`GET: Retrieved ${articleIds.length} flagged article IDs from Set`);
 
-      // Upstash Redis automatically deserializes objects, so items should already be objects
-      const articles = flagged
-        .map(item => {
-          // Handle both objects (new format) and strings (old format)
-          if (typeof item === 'string') {
-            try {
-              const parsed = JSON.parse(item);
-              console.log(`GET: Parsed string article ID: ${parsed.id}`);
-              return parsed;
-            } catch (e) {
-              console.error(`GET: Failed to parse string item:`, e);
-              return null;
-            }
-          } else if (typeof item === 'object' && item !== null) {
-            console.log(`GET: Object article ID: ${item.id}, title: ${item.title?.substring(0, 50)}`);
-            return item;
+      if (articleIds.length === 0) {
+        return res.status(200).json({
+          ok: true,
+          flagged_count: 0,
+          articles: []
+        });
+      }
+
+      // Get article data from Hash
+      const articleData = await redis.hmget(FLAGGED_HASH, ...articleIds);
+      console.log(`GET: Retrieved ${articleData.length} articles from Hash`);
+
+      // Parse JSON strings and filter out nulls
+      const articles = articleData
+        .map((dataStr, index) => {
+          if (!dataStr) {
+            console.warn(`GET: No data found in Hash for article ID: ${articleIds[index]}`);
+            return null;
           }
-          console.error(`GET: Unexpected item type: ${typeof item}`);
-          return null;
+          try {
+            const parsed = JSON.parse(dataStr);
+            console.log(`GET: Loaded article ID: ${parsed.id}, title: ${parsed.title?.substring(0, 50)}`);
+            return parsed;
+          } catch (e) {
+            console.error(`GET: Failed to parse article data for ID ${articleIds[index]}:`, e);
+            return null;
+          }
         })
         .filter(Boolean);
 

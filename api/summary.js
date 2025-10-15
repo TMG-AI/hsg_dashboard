@@ -114,7 +114,7 @@ async function getStreamedMeltwaterCount(window) {
 // Get HISTORICAL count from Meltwater API (with caching to prevent rate limits)
 async function getMeltwaterCountFromAPI(window) {
   const MELTWATER_API_KEY = process.env.MELTWATER_API_KEY;
-  const SEARCH_ID = '27655196';
+  const SEARCH_ID = '27861003';
 
   if (!MELTWATER_API_KEY) {
     console.log('No Meltwater API key - will count from Redis');

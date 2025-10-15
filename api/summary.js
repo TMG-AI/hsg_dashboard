@@ -304,7 +304,7 @@ export default async function handler(req, res) {
     });
 
     // Initialize counts
-    const by = { meltwater: 0, google_alerts: 0, rss: 0, newsletter: 0, other: 0 };
+    const by = { meltwater: 0, google_alerts: 0, rss: 0, newsletter: 0, congress: 0, other: 0 };
     let meltwaterCountFromRedis = 0;
 
     // Count items from Redis by origin (except Meltwater - we'll calculate that separately)
@@ -345,7 +345,7 @@ export default async function handler(req, res) {
     }
 
     // Calculate grand total (EXCLUDE Meltwater - it has its own page)
-    const total = by.google_alerts + by.rss + by.newsletter + by.other;
+    const total = by.google_alerts + by.rss + by.newsletter + by.congress + by.other;
 
     // Include streaming status in response
     const realtimeStats = {

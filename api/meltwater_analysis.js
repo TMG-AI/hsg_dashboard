@@ -1,0 +1,352 @@
+// /api/meltwater_analysis.js
+// Analyze Meltwater's unique value vs Google Alerts and Newsletters
+import { Redis } from "@upstash/redis";
+
+const redis = new Redis({
+  url: process.env.STORAGE_KV_REST_API_URL,
+  token: process.env.STORAGE_KV_REST_API_TOKEN,
+});
+
+const ZSET = "mentions:z";
+
+function toObj(x) {
+  if (!x) return null;
+  if (typeof x === "object" && x.id) return x;
+  try {
+    return JSON.parse(x);
+  } catch {
+    return null;
+  }
+}
+
+function detectOrigin(m) {
+  if (m && typeof m.origin === "string" && m.origin && m.origin !== "") {
+    return m.origin;
+  }
+
+  if (
+    m?.section === "Newsletter" ||
+    (Array.isArray(m?.matched) && m.matched.includes("newsletter")) ||
+    (m?.id && m.id.startsWith("newsletter_"))
+  ) {
+    return "newsletter";
+  }
+
+  const prov = (m?.provider || "").toLowerCase();
+  if (
+    prov.includes("meltwater") ||
+    m?.section === "Meltwater" ||
+    (Array.isArray(m?.matched) && m.matched.includes("meltwater-alert")) ||
+    (m?.id && m.id.startsWith("mw_stream_"))
+  ) {
+    return "meltwater";
+  }
+
+  if (m?.section === "Congress" || (m?.id && m.id.startsWith("congress_"))) {
+    return "congress";
+  }
+
+  return "google_alerts";
+}
+
+// Normalize text for comparison (remove whitespace, punctuation, lowercase)
+function normalizeText(text) {
+  if (!text) return "";
+  return text
+    .toLowerCase()
+    .replace(/[^\w\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// Calculate similarity between two texts using word overlap
+function calculateSimilarity(text1, text2) {
+  const words1 = new Set(normalizeText(text1).split(" "));
+  const words2 = new Set(normalizeText(text2).split(" "));
+
+  const intersection = new Set([...words1].filter((w) => words2.has(w)));
+  const union = new Set([...words1, ...words2]);
+
+  if (union.size === 0) return 0;
+  return intersection.size / union.size;
+}
+
+// Check if URL domains match (same source)
+function isSameSource(url1, url2) {
+  try {
+    const domain1 = new URL(url1).hostname.replace("www.", "");
+    const domain2 = new URL(url2).hostname.replace("www.", "");
+    return domain1 === domain2;
+  } catch {
+    return false;
+  }
+}
+
+// Analyze content uniqueness
+function analyzeUniqueness(meltwaterArticles, otherArticles) {
+  const analysis = {
+    total_meltwater: meltwaterArticles.length,
+    total_other: otherArticles.length,
+    unique_sources: 0,
+    duplicate_content: 0,
+    similar_content: 0, // 30-70% similarity
+    unique_content: 0, // <30% similarity
+    unique_meltwater_articles: [],
+    duplicate_examples: [],
+    meltwater_only_domains: new Set(),
+    shared_domains: new Set(),
+  };
+
+  // Track all domains
+  const otherDomains = new Set();
+  otherArticles.forEach((article) => {
+    if (article.link) {
+      try {
+        const domain = new URL(article.link).hostname.replace("www.", "");
+        otherDomains.add(domain);
+      } catch {}
+    }
+  });
+
+  // Analyze each Meltwater article
+  meltwaterArticles.forEach((mw) => {
+    let bestMatch = null;
+    let bestSimilarity = 0;
+    let isSameSourceMatch = false;
+
+    // Compare with all other articles
+    otherArticles.forEach((other) => {
+      // Check if same source
+      if (mw.link && other.link && isSameSource(mw.link, other.link)) {
+        isSameSourceMatch = true;
+        bestMatch = other;
+        bestSimilarity = 1.0;
+        return;
+      }
+
+      // Calculate title similarity
+      const titleSim = calculateSimilarity(
+        mw.title || "",
+        other.title || ""
+      );
+      const summarySim = calculateSimilarity(
+        mw.summary || "",
+        other.summary || ""
+      );
+
+      const avgSimilarity = (titleSim + summarySim) / 2;
+
+      if (avgSimilarity > bestSimilarity) {
+        bestSimilarity = avgSimilarity;
+        bestMatch = other;
+      }
+    });
+
+    // Track Meltwater domain
+    if (mw.link) {
+      try {
+        const domain = new URL(mw.link).hostname.replace("www.", "");
+        if (otherDomains.has(domain)) {
+          analysis.shared_domains.add(domain);
+        } else {
+          analysis.meltwater_only_domains.add(domain);
+        }
+      } catch {}
+    }
+
+    // Categorize based on similarity
+    if (bestSimilarity >= 0.7) {
+      // High similarity - likely duplicate
+      analysis.duplicate_content++;
+      if (analysis.duplicate_examples.length < 5) {
+        analysis.duplicate_examples.push({
+          meltwater: {
+            title: mw.title,
+            link: mw.link,
+            date: mw.published_at,
+          },
+          matched_with: {
+            title: bestMatch?.title,
+            link: bestMatch?.link,
+            origin: detectOrigin(bestMatch),
+          },
+          similarity: Math.round(bestSimilarity * 100),
+        });
+      }
+    } else if (bestSimilarity >= 0.3) {
+      // Medium similarity - related but different angle
+      analysis.similar_content++;
+    } else {
+      // Low similarity - unique content
+      analysis.unique_content++;
+      if (analysis.unique_meltwater_articles.length < 10) {
+        analysis.unique_meltwater_articles.push({
+          title: mw.title,
+          link: mw.link,
+          summary: mw.summary?.substring(0, 200) + "...",
+          date: mw.published_at,
+          publisher: mw.publisher,
+        });
+      }
+    }
+  });
+
+  // Calculate source uniqueness
+  analysis.unique_sources = analysis.meltwater_only_domains.size;
+  analysis.meltwater_only_domains = Array.from(
+    analysis.meltwater_only_domains
+  );
+  analysis.shared_domains = Array.from(analysis.shared_domains);
+
+  // Calculate percentages
+  if (analysis.total_meltwater > 0) {
+    analysis.uniqueness_percentage = Math.round(
+      (analysis.unique_content / analysis.total_meltwater) * 100
+    );
+    analysis.duplicate_percentage = Math.round(
+      (analysis.duplicate_content / analysis.total_meltwater) * 100
+    );
+    analysis.similar_percentage = Math.round(
+      (analysis.similar_content / analysis.total_meltwater) * 100
+    );
+  }
+
+  return analysis;
+}
+
+export default async function handler(req, res) {
+  try {
+    // Get time window (default: last 7 days)
+    const days = parseInt(req.query?.days || "7");
+    const now = Math.floor(Date.now() / 1000);
+    const startTime = now - days * 24 * 60 * 60;
+
+    // Fetch all articles from Redis
+    const raw = await redis.zrange(ZSET, 0, 10000, { rev: true });
+    const items = raw.map(toObj).filter(Boolean);
+
+    console.log(`Total items in Redis: ${items.length}`);
+
+    // Filter to time window
+    const recentItems = items.filter((m) => {
+      const ts = Number(m?.published_ts ?? NaN);
+      return Number.isFinite(ts) && ts >= startTime && ts <= now;
+    });
+
+    console.log(`Items in last ${days} days: ${recentItems.length}`);
+
+    // Separate by origin
+    const meltwaterArticles = [];
+    const googleAlertsArticles = [];
+    const newsletterArticles = [];
+    const otherArticles = [];
+
+    recentItems.forEach((item) => {
+      const origin = detectOrigin(item);
+      if (origin === "meltwater") {
+        meltwaterArticles.push(item);
+      } else if (origin === "google_alerts") {
+        googleAlertsArticles.push(item);
+      } else if (origin === "newsletter") {
+        newsletterArticles.push(item);
+      } else {
+        otherArticles.push(item);
+      }
+    });
+
+    console.log(`Meltwater: ${meltwaterArticles.length}`);
+    console.log(`Google Alerts: ${googleAlertsArticles.length}`);
+    console.log(`Newsletters: ${newsletterArticles.length}`);
+
+    // Combine non-Meltwater sources for comparison
+    const combinedOtherSources = [
+      ...googleAlertsArticles,
+      ...newsletterArticles,
+      ...otherArticles,
+    ];
+
+    // Perform analysis
+    const analysis = analyzeUniqueness(
+      meltwaterArticles,
+      combinedOtherSources
+    );
+
+    // Add breakdown by comparison source
+    const vsGoogleAlerts = analyzeUniqueness(
+      meltwaterArticles,
+      googleAlertsArticles
+    );
+    const vsNewsletters = analyzeUniqueness(
+      meltwaterArticles,
+      newsletterArticles
+    );
+
+    res.status(200).json({
+      ok: true,
+      time_period: {
+        days: days,
+        start: new Date(startTime * 1000).toISOString(),
+        end: new Date(now * 1000).toISOString(),
+      },
+      article_counts: {
+        meltwater: meltwaterArticles.length,
+        google_alerts: googleAlertsArticles.length,
+        newsletters: newsletterArticles.length,
+        other: otherArticles.length,
+      },
+      overall_analysis: analysis,
+      comparison_breakdowns: {
+        vs_google_alerts: {
+          unique_percentage: vsGoogleAlerts.uniqueness_percentage,
+          duplicate_percentage: vsGoogleAlerts.duplicate_percentage,
+          unique_sources: vsGoogleAlerts.unique_sources,
+        },
+        vs_newsletters: {
+          unique_percentage: vsNewsletters.uniqueness_percentage,
+          duplicate_percentage: vsNewsletters.duplicate_percentage,
+          unique_sources: vsNewsletters.unique_sources,
+        },
+      },
+      recommendation: generateRecommendation(analysis),
+      generated_at: new Date().toISOString(),
+    });
+  } catch (e) {
+    console.error("Meltwater analysis error:", e);
+    res.status(500).json({
+      ok: false,
+      error: e?.message || String(e),
+    });
+  }
+}
+
+function generateRecommendation(analysis) {
+  const uniquePercent = analysis.uniqueness_percentage || 0;
+  const duplicatePercent = analysis.duplicate_percentage || 0;
+  const uniqueSources = analysis.unique_sources || 0;
+
+  if (uniquePercent >= 50 || uniqueSources >= 10) {
+    return {
+      verdict: "HIGH VALUE",
+      reason: `Meltwater provides ${uniquePercent}% unique content and ${uniqueSources} exclusive sources not found elsewhere. This represents significant value.`,
+      confidence: "high",
+    };
+  } else if (uniquePercent >= 30 || uniqueSources >= 5) {
+    return {
+      verdict: "MODERATE VALUE",
+      reason: `Meltwater provides ${uniquePercent}% unique content and ${uniqueSources} exclusive sources. There is some overlap with other sources, but meaningful unique coverage.`,
+      confidence: "medium",
+    };
+  } else if (duplicatePercent >= 70) {
+    return {
+      verdict: "LOW VALUE",
+      reason: `${duplicatePercent}% of Meltwater content is duplicate or very similar to content from free sources. Only ${uniquePercent}% is unique.`,
+      confidence: "high",
+    };
+  } else {
+    return {
+      verdict: "UNCERTAIN",
+      reason: `Mixed results: ${uniquePercent}% unique, ${duplicatePercent}% duplicate. May need longer analysis period or keyword refinement.`,
+      confidence: "low",
+    };
+  }
+}

@@ -59,7 +59,100 @@ function normalizeText(text) {
     .trim();
 }
 
-// Calculate similarity between two texts using word overlap
+// Extract key entities and topics from text (companies, people, places, topics)
+function extractKeyEntities(text) {
+  if (!text) return new Set();
+
+  const normalized = normalizeText(text);
+  const entities = new Set();
+
+  // Common stopwords to ignore
+  const stopwords = new Set([
+    'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for',
+    'of', 'with', 'by', 'from', 'as', 'is', 'was', 'are', 'were', 'be',
+    'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will',
+    'would', 'should', 'could', 'may', 'might', 'must', 'can', 'this',
+    'that', 'these', 'those', 'it', 'its', 'he', 'she', 'they', 'we',
+    'you', 'i', 'me', 'my', 'your', 'his', 'her', 'their', 'our'
+  ]);
+
+  // Extract capitalized words (likely proper nouns - companies, people, places)
+  const words = text.split(/\s+/);
+  for (let i = 0; i < words.length; i++) {
+    const word = words[i];
+    // Check if word starts with capital letter (not at sentence start)
+    if (/^[A-Z][a-z]+/.test(word)) {
+      const normalized = word.toLowerCase();
+      if (!stopwords.has(normalized) && normalized.length > 2) {
+        entities.add(normalized);
+
+        // Check for multi-word entities (e.g., "Hong Kong", "United States")
+        if (i < words.length - 1 && /^[A-Z][a-z]+/.test(words[i + 1])) {
+          const phrase = `${word} ${words[i + 1]}`.toLowerCase();
+          entities.add(phrase);
+        }
+      }
+    }
+  }
+
+  // Extract significant keywords (words that appear to be important based on context)
+  // Look for domain-specific terms related to China, Hong Kong, policy, business
+  const importantKeywords = [
+    'china', 'chinese', 'beijing', 'shanghai', 'hong kong', 'hongshan',
+    'hongshan capital', 'taiwan', 'macau', 'asia', 'asian',
+    'semiconductor', 'chip', 'technology', 'ai', 'artificial intelligence',
+    'trade', 'tariff', 'export', 'import', 'sanctions', 'regulation',
+    'investment', 'venture', 'capital', 'funding', 'ipo', 'acquisition',
+    'cybersecurity', 'data', 'privacy', 'security', 'surveillance',
+    'military', 'defense', 'national security', 'foreign policy',
+    'manufacturing', 'supply chain', 'factory', 'production',
+    'cryptocurrency', 'blockchain', 'digital currency', 'fintech'
+  ];
+
+  const lowerText = normalized.toLowerCase();
+  for (const keyword of importantKeywords) {
+    if (lowerText.includes(keyword)) {
+      entities.add(keyword);
+    }
+  }
+
+  return entities;
+}
+
+// Calculate content similarity based on key entities and topics
+function calculateContentSimilarity(article1, article2) {
+  // Combine title and summary for both articles
+  const text1 = `${article1.title || ''} ${article1.summary || ''}`;
+  const text2 = `${article2.title || ''} ${article2.summary || ''}`;
+
+  // Extract entities from both
+  const entities1 = extractKeyEntities(text1);
+  const entities2 = extractKeyEntities(text2);
+
+  if (entities1.size === 0 && entities2.size === 0) return 0;
+  if (entities1.size === 0 || entities2.size === 0) return 0;
+
+  // Calculate Jaccard similarity on entities
+  const intersection = new Set([...entities1].filter(e => entities2.has(e)));
+  const union = new Set([...entities1, ...entities2]);
+
+  const entitySimilarity = intersection.size / union.size;
+
+  // Also do basic word overlap for additional context
+  const words1 = new Set(normalizeText(text1).split(" ").filter(w => w.length > 3));
+  const words2 = new Set(normalizeText(text2).split(" ").filter(w => w.length > 3));
+
+  const wordIntersection = new Set([...words1].filter(w => words2.has(w)));
+  const wordUnion = new Set([...words1, ...words2]);
+
+  const wordSimilarity = wordUnion.size > 0 ? wordIntersection.size / wordUnion.size : 0;
+
+  // Weight entity similarity higher (70%) than word similarity (30%)
+  // Because entities capture the key subjects/topics being discussed
+  return (entitySimilarity * 0.7) + (wordSimilarity * 0.3);
+}
+
+// Legacy function for backward compatibility
 function calculateSimilarity(text1, text2) {
   const words1 = new Set(normalizeText(text1).split(" "));
   const words2 = new Set(normalizeText(text2).split(" "));
@@ -124,20 +217,13 @@ function analyzeUniqueness(meltwaterArticles, otherArticles) {
         return;
       }
 
-      // Calculate title similarity
-      const titleSim = calculateSimilarity(
-        mw.title || "",
-        other.title || ""
-      );
-      const summarySim = calculateSimilarity(
-        mw.summary || "",
-        other.summary || ""
-      );
+      // Use enhanced content similarity that compares topics and entities
+      // This tells us if Google Alerts/Newsletters covered the SAME STORY/TOPIC
+      // even if from different sources
+      const contentSimilarity = calculateContentSimilarity(mw, other);
 
-      const avgSimilarity = (titleSim + summarySim) / 2;
-
-      if (avgSimilarity > bestSimilarity) {
-        bestSimilarity = avgSimilarity;
+      if (contentSimilarity > bestSimilarity) {
+        bestSimilarity = contentSimilarity;
         bestMatch = other;
       }
     });

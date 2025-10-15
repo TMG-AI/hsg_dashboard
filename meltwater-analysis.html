@@ -332,8 +332,8 @@
 
   <header>
     <div class="header-content">
-      <h1 class="header-title">📊 Meltwater Value Analysis</h1>
-      <a href="/" class="back-btn">← Back to Dashboard</a>
+      <h1 class="header-title">Meltwater Value Analysis</h1>
+      <a href="/" class="back-btn">Back to Dashboard</a>
     </div>
   </header>
 
@@ -346,7 +346,7 @@
         <option value="14">Last 14 Days</option>
         <option value="30">Last 30 Days</option>
       </select>
-      <button onclick="runAnalysis()">🔄 Refresh Analysis</button>
+      <button onclick="runAnalysis()">Refresh Analysis</button>
     </div>
 
     <div id="loading" class="loading" style="display:none">Running analysis...</div>
@@ -379,7 +379,7 @@
         loading.style.display = 'none';
         results.innerHTML = `
           <div class="verdict-card uncertain">
-            <h2 class="verdict-title">❌ Error</h2>
+            <h2 class="verdict-title">Error</h2>
             <p class="verdict-reason">${error.message}</p>
           </div>`;
         console.error('Analysis error:', error);
@@ -397,15 +397,10 @@
       else if (rec.verdict === 'MODERATE VALUE') verdictClass = 'moderate-value';
       else if (rec.verdict === 'LOW VALUE') verdictClass = 'low-value';
 
-      let verdictIcon = '❓';
-      if (rec.verdict === 'HIGH VALUE') verdictIcon = '✅';
-      else if (rec.verdict === 'MODERATE VALUE') verdictIcon = '⚠️';
-      else if (rec.verdict === 'LOW VALUE') verdictIcon = '❌';
-
       results.innerHTML = `
         <!-- Verdict Card -->
         <div class="verdict-card ${verdictClass}">
-          <h2 class="verdict-title">${verdictIcon} ${rec.verdict}</h2>
+          <h2 class="verdict-title">${rec.verdict}</h2>
           <p class="verdict-reason">${rec.reason}</p>
         </div>
 

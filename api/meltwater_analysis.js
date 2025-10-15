@@ -334,6 +334,124 @@ function analyzeUniqueness(meltwaterArticles, otherArticles) {
   return analysis;
 }
 
+// NEW: Topic-level analysis - What topics/themes does each source cover?
+function analyzeTopicCoverage(meltwaterArticles, googleAlertsArticles, newsletterArticles) {
+  // Extract all entities/topics from each source
+  const extractAllTopics = (articles) => {
+    const topicCounts = {};
+    articles.forEach(article => {
+      const text = `${article.title || ''} ${article.summary || ''}`;
+      const entities = extractKeyEntities(text);
+      entities.forEach(entity => {
+        topicCounts[entity] = (topicCounts[entity] || 0) + 1;
+      });
+    });
+    return topicCounts;
+  };
+
+  const meltwaterTopics = extractAllTopics(meltwaterArticles);
+  const googleTopics = extractAllTopics(googleAlertsArticles);
+  const newsletterTopics = extractAllTopics(newsletterArticles);
+  const combinedFreeTopics = {};
+
+  // Combine Google + Newsletter topics
+  Object.keys(googleTopics).forEach(topic => {
+    combinedFreeTopics[topic] = googleTopics[topic];
+  });
+  Object.keys(newsletterTopics).forEach(topic => {
+    combinedFreeTopics[topic] = (combinedFreeTopics[topic] || 0) + newsletterTopics[topic];
+  });
+
+  // Find top topics in each source
+  const getTopTopics = (topicCounts, n = 20) => {
+    return Object.entries(topicCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, n)
+      .map(([topic, count]) => ({ topic, count }));
+  };
+
+  const topMeltwaterTopics = getTopTopics(meltwaterTopics, 30);
+  const topFreeTopics = getTopTopics(combinedFreeTopics, 30);
+
+  // Find topics ONLY in Meltwater
+  const uniqueMeltwaterTopics = Object.keys(meltwaterTopics).filter(
+    topic => !combinedFreeTopics[topic] && meltwaterTopics[topic] >= 3
+  );
+
+  // Find topics ONLY in Google/Newsletter
+  const uniqueFreeTopics = Object.keys(combinedFreeTopics).filter(
+    topic => !meltwaterTopics[topic] && combinedFreeTopics[topic] >= 3
+  );
+
+  // Find overlapping topics (covered by BOTH)
+  const overlappingTopics = Object.keys(meltwaterTopics).filter(
+    topic => combinedFreeTopics[topic]
+  );
+
+  // Calculate coverage percentages
+  const totalMeltwaterTopics = Object.keys(meltwaterTopics).length;
+  const totalFreeTopics = Object.keys(combinedFreeTopics).length;
+  const overlapCount = overlappingTopics.length;
+
+  const meltwaterUniquePercent = totalMeltwaterTopics > 0
+    ? Math.round((uniqueMeltwaterTopics.length / totalMeltwaterTopics) * 100)
+    : 0;
+
+  // Calculate how much Meltwater is adding to the conversation
+  const topicsNotInFree = Object.keys(meltwaterTopics).filter(
+    topic => !combinedFreeTopics[topic]
+  );
+
+  return {
+    summary: {
+      total_meltwater_topics: totalMeltwaterTopics,
+      total_free_topics: totalFreeTopics,
+      overlapping_topics: overlapCount,
+      meltwater_unique_topics: uniqueMeltwaterTopics.length,
+      free_unique_topics: uniqueFreeTopics.length,
+      meltwater_topic_uniqueness: meltwaterUniquePercent
+    },
+    top_meltwater_topics: topMeltwaterTopics,
+    top_free_topics: topFreeTopics,
+    meltwater_only_topics: uniqueMeltwaterTopics.slice(0, 30),
+    free_only_topics: uniqueFreeTopics.slice(0, 30),
+    interpretation: generateTopicInterpretation(
+      meltwaterUniquePercent,
+      uniqueMeltwaterTopics.length,
+      topMeltwaterTopics,
+      topFreeTopics
+    )
+  };
+}
+
+function generateTopicInterpretation(uniquePercent, uniqueCount, meltwaterTopics, freeTopics) {
+  const meltwaterTop5 = meltwaterTopics.slice(0, 5).map(t => t.topic);
+  const freeTop5 = freeTopics.slice(0, 5).map(t => t.topic);
+
+  // Check if topics are substantially different
+  const topicOverlap = meltwaterTop5.filter(t => freeTop5.includes(t)).length;
+
+  if (topicOverlap >= 4) {
+    return {
+      verdict: "OVERLAPPING COVERAGE",
+      explanation: "Both sources are covering the same major topics (trade, policy, tariffs, etc.). Meltwater is not adding significantly different themes.",
+      value: "LOW"
+    };
+  } else if (topicOverlap >= 2) {
+    return {
+      verdict: "PARTIAL OVERLAP",
+      explanation: "Some shared topics, but Meltwater covers additional themes not found in free sources.",
+      value: "MODERATE"
+    };
+  } else {
+    return {
+      verdict: "DISTINCT COVERAGE",
+      explanation: "Meltwater covers substantially different topics than Google Alerts/Newsletters. Provides unique thematic coverage.",
+      value: "HIGH"
+    };
+  }
+}
+
 export default async function handler(req, res) {
   try {
     // Get time window (default: last 7 days)
@@ -385,7 +503,7 @@ export default async function handler(req, res) {
       ...otherArticles,
     ];
 
-    // Perform analysis
+    // Perform OLD article-by-article analysis
     const analysis = analyzeUniqueness(
       meltwaterArticles,
       combinedOtherSources
@@ -398,6 +516,13 @@ export default async function handler(req, res) {
     );
     const vsNewsletters = analyzeUniqueness(
       meltwaterArticles,
+      newsletterArticles
+    );
+
+    // NEW: Perform topic-level analysis
+    const topicAnalysis = analyzeTopicCoverage(
+      meltwaterArticles,
+      googleAlertsArticles,
       newsletterArticles
     );
 
@@ -415,6 +540,7 @@ export default async function handler(req, res) {
         other: otherArticles.length,
       },
       overall_analysis: analysis,
+      topic_analysis: topicAnalysis,
       comparison_breakdowns: {
         vs_google_alerts: {
           unique_percentage: vsGoogleAlerts.uniqueness_percentage,

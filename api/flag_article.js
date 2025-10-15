@@ -60,7 +60,8 @@ export default async function handler(req, res) {
 
       console.log(`POST: Storing flagged article (first 300 chars):`, JSON.stringify(flaggedArticle).substring(0, 300));
 
-      const saddResult = await redis.sadd(FLAGGED_SET, JSON.stringify(flaggedArticle));
+      // Upstash Redis automatically serializes objects, so pass the object directly
+      const saddResult = await redis.sadd(FLAGGED_SET, flaggedArticle);
       console.log(`POST: SADD result: ${saddResult} (1 = new member, 0 = already existed)`);
 
       // Verify it was added
@@ -91,7 +92,14 @@ export default async function handler(req, res) {
       let removed = false;
       for (const item of flagged) {
         try {
-          const parsed = JSON.parse(item);
+          // Handle both objects and strings
+          let parsed;
+          if (typeof item === 'string') {
+            parsed = JSON.parse(item);
+          } else {
+            parsed = item;
+          }
+
           console.log(`DELETE: Comparing with parsed.id: "${parsed.id}" (type: ${typeof parsed.id}), match: ${parsed.id === article_id}`);
 
           if (parsed.id === article_id) {
@@ -124,20 +132,33 @@ export default async function handler(req, res) {
       console.log(`GET: Fetching flagged articles from Redis set: ${FLAGGED_SET}`);
 
       const flagged = await redis.smembers(FLAGGED_SET);
-      console.log(`GET: Retrieved ${flagged.length} raw items from Redis`);
+      console.log(`GET: Retrieved ${flagged.length} items from Redis`);
+      console.log(`GET: First item type:`, typeof flagged[0]);
+      console.log(`GET: First item sample:`, JSON.stringify(flagged[0])?.substring(0, 200));
 
-      const articles = flagged.map(item => {
-        try {
-          const parsed = JSON.parse(item);
-          console.log(`GET: Parsed article ID: ${parsed.id}, title: ${parsed.title?.substring(0, 50)}`);
-          return parsed;
-        } catch (e) {
-          console.error(`GET: Failed to parse item:`, e);
+      // Upstash Redis automatically deserializes objects, so items should already be objects
+      const articles = flagged
+        .map(item => {
+          // Handle both objects (new format) and strings (old format)
+          if (typeof item === 'string') {
+            try {
+              const parsed = JSON.parse(item);
+              console.log(`GET: Parsed string article ID: ${parsed.id}`);
+              return parsed;
+            } catch (e) {
+              console.error(`GET: Failed to parse string item:`, e);
+              return null;
+            }
+          } else if (typeof item === 'object' && item !== null) {
+            console.log(`GET: Object article ID: ${item.id}, title: ${item.title?.substring(0, 50)}`);
+            return item;
+          }
+          console.error(`GET: Unexpected item type: ${typeof item}`);
           return null;
-        }
-      }).filter(Boolean);
+        })
+        .filter(Boolean);
 
-      console.log(`GET: Successfully parsed ${articles.length} articles`);
+      console.log(`GET: Successfully processed ${articles.length} articles`);
 
       // Sort by flagged_at (newest first)
       articles.sort((a, b) => new Date(b.flagged_at) - new Date(a.flagged_at));

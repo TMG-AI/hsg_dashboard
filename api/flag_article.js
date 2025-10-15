@@ -105,10 +105,10 @@ export default async function handler(req, res) {
       console.log(`GET: Fetching flagged articles from Redis`);
 
       // Get all article IDs from Set
-      const articleIds = await redis.smembers(FLAGGED_SET);
+      const articleIds = await redis.smembers(FLAGGED_SET) || [];
       console.log(`GET: Retrieved ${articleIds.length} flagged article IDs from Set`);
 
-      if (articleIds.length === 0) {
+      if (!articleIds || articleIds.length === 0) {
         return res.status(200).json({
           ok: true,
           flagged_count: 0,

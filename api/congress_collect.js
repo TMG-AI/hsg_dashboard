@@ -43,6 +43,38 @@ function matchesKeywords(text) {
   return lower.includes("china") || lower.includes("chinese");
 }
 
+// Fetch detailed bill summary from Congress.gov API
+async function fetchBillSummary(congress, type, number, apiKey) {
+  try {
+    const url = `https://api.congress.gov/v3/bill/${congress}/${type}/${number}/summaries?api_key=${apiKey}&format=json`;
+
+    const response = await fetch(url, {
+      headers: {
+        'X-Api-Key': apiKey,
+        'Accept': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      console.log(`Could not fetch summary for ${type}${number}: ${response.status}`);
+      return null;
+    }
+
+    const data = await response.json();
+
+    // Get the most recent summary (usually the first one)
+    if (data.summaries && data.summaries.length > 0) {
+      const latestSummary = data.summaries[0];
+      return latestSummary.text || null;
+    }
+
+    return null;
+  } catch (error) {
+    console.log(`Error fetching summary for ${type}${number}:`, error.message);
+    return null;
+  }
+}
+
 // Fetch bills from Congress.gov API
 async function fetchBills(congress = "119", limit = 250) {
   const apiKey = process.env.CONGRESS_API_KEY;
@@ -89,6 +121,7 @@ export default async function handler(req, res) {
     let found = 0, stored = 0, errors = [];
 
     const congress = process.env.CONGRESS_NUMBER || "119"; // Default to 119th Congress
+    const apiKey = process.env.CONGRESS_API_KEY;
     const { bills, error } = await fetchBills(congress, 250);
 
     if (error) {
@@ -141,6 +174,18 @@ export default async function handler(req, res) {
         const mid = idFromCanonical(canon);
         await redis.sadd(SEEN_ID, mid);
 
+        // Fetch detailed bill summary (with fallback to latestAction)
+        let summary = latestAction;
+        if (apiKey) {
+          const detailedSummary = await fetchBillSummary(congress, type, number, apiKey);
+          if (detailedSummary) {
+            summary = detailedSummary;
+            console.log(`Fetched detailed summary for ${billId}`);
+          } else {
+            console.log(`No detailed summary available for ${billId}, using latestAction`);
+          }
+        }
+
         // Get update date (use latestAction date or updateDate)
         const updateDate = bill.latestAction?.actionDate || bill.updateDate || new Date().toISOString();
         const ts = toEpoch(updateDate);
@@ -154,7 +199,7 @@ export default async function handler(req, res) {
           link: billUrl,
           source: "Congress.gov",
           matched: ["china", "chinese", "congress"],
-          summary: latestAction,
+          summary: summary,
           origin: "congress",
           published_ts: ts,
           published: new Date(ts * 1000).toISOString(),

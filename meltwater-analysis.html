@@ -397,12 +397,110 @@
       else if (rec.verdict === 'MODERATE VALUE') verdictClass = 'moderate-value';
       else if (rec.verdict === 'LOW VALUE') verdictClass = 'low-value';
 
+      // Topic analysis verdict styling
+      let topicVerdictClass = 'uncertain';
+      let topicInterp = data.topic_analysis?.interpretation;
+      if (topicInterp?.value === 'HIGH') topicVerdictClass = 'high-value';
+      else if (topicInterp?.value === 'MODERATE') topicVerdictClass = 'moderate-value';
+      else if (topicInterp?.value === 'LOW') topicVerdictClass = 'low-value';
+
       results.innerHTML = `
-        <!-- Verdict Card -->
+        <!-- OLD Verdict Card (Article-by-Article) -->
         <div class="verdict-card ${verdictClass}">
           <h2 class="verdict-title">${rec.verdict}</h2>
           <p class="verdict-reason">${rec.reason}</p>
+          <p style="font-size:13px;color:#666;margin-top:16px;font-style:italic">Based on article-by-article comparison</p>
         </div>
+
+        <!-- NEW Topic Coverage Verdict -->
+        ${data.topic_analysis ? `
+          <div class="verdict-card ${topicVerdictClass}">
+            <h2 class="verdict-title" style="font-size:28px">TOPIC ANALYSIS: ${topicInterp.verdict}</h2>
+            <p class="verdict-reason">${topicInterp.explanation}</p>
+            <p style="font-size:13px;color:#666;margin-top:16px;font-style:italic">Based on overall topic coverage across all articles</p>
+          </div>
+
+          <!-- Topic Stats -->
+          <div class="stats-grid">
+            <div class="stat-card">
+              <p class="stat-label">Meltwater Topics</p>
+              <p class="stat-value">${data.topic_analysis.summary.total_meltwater_topics}</p>
+              <p class="stat-subtext">Unique topics mentioned</p>
+            </div>
+            <div class="stat-card">
+              <p class="stat-label">Free Source Topics</p>
+              <p class="stat-value">${data.topic_analysis.summary.total_free_topics}</p>
+              <p class="stat-subtext">Google Alerts + Newsletters</p>
+            </div>
+            <div class="stat-card">
+              <p class="stat-label">Overlapping Topics</p>
+              <p class="stat-value">${data.topic_analysis.summary.overlapping_topics}</p>
+              <p class="stat-subtext">Covered by BOTH sources</p>
+            </div>
+            <div class="stat-card">
+              <p class="stat-label">Meltwater-Only Topics</p>
+              <p class="stat-value">${data.topic_analysis.summary.meltwater_unique_topics}</p>
+              <p class="stat-subtext">Not in Google/Newsletter</p>
+            </div>
+          </div>
+
+          <!-- Top Topics Comparison -->
+          <div class="chart-container">
+            <h3 class="chart-title">Top Topics Comparison</h3>
+            <div class="comparison-grid">
+              <div class="comparison-card">
+                <h4 class="comparison-title">Top 10 Meltwater Topics</h4>
+                ${data.topic_analysis.top_meltwater_topics.slice(0, 10).map(t => `
+                  <div class="comparison-stat">
+                    <span class="comparison-stat-label">${escapeHtml(t.topic)}:</span>
+                    <span class="comparison-stat-value">${t.count} articles</span>
+                  </div>
+                `).join('')}
+              </div>
+              <div class="comparison-card">
+                <h4 class="comparison-title">Top 10 Free Source Topics</h4>
+                ${data.topic_analysis.top_free_topics.slice(0, 10).map(t => `
+                  <div class="comparison-stat">
+                    <span class="comparison-stat-label">${escapeHtml(t.topic)}:</span>
+                    <span class="comparison-stat-value">${t.count} articles</span>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          </div>
+
+          <!-- Meltwater-Only Topics -->
+          ${data.topic_analysis.meltwater_only_topics.length > 0 ? `
+            <div class="examples-section">
+              <h3 class="examples-title">Topics ONLY Covered by Meltwater (${data.topic_analysis.meltwater_only_topics.length} topics)</h3>
+              <p style="color:#666;font-size:14px;margin-bottom:16px">These topics appear in Meltwater but not in Google Alerts or Newsletters at all:</p>
+              <div class="domain-list">
+                ${data.topic_analysis.meltwater_only_topics.slice(0, 30).map(topic => `
+                  <span class="domain-tag">${escapeHtml(topic)}</span>
+                `).join('')}
+                ${data.topic_analysis.meltwater_only_topics.length > 30 ? `
+                  <span class="domain-tag">+ ${data.topic_analysis.meltwater_only_topics.length - 30} more</span>
+                ` : ''}
+              </div>
+            </div>
+          ` : ''}
+
+          <!-- Free-Only Topics -->
+          ${data.topic_analysis.free_only_topics.length > 0 ? `
+            <div class="examples-section">
+              <h3 class="examples-title">Topics ONLY Covered by Google/Newsletter (${data.topic_analysis.free_only_topics.length} topics)</h3>
+              <p style="color:#666;font-size:14px;margin-bottom:16px">These topics appear in free sources but Meltwater missed them:</p>
+              <div class="domain-list">
+                ${data.topic_analysis.free_only_topics.slice(0, 30).map(topic => `
+                  <span class="domain-tag" style="background:#ffebee;color:#c62828">${escapeHtml(topic)}</span>
+                `).join('')}
+                ${data.topic_analysis.free_only_topics.length > 30 ? `
+                  <span class="domain-tag" style="background:#ffebee;color:#c62828">+ ${data.topic_analysis.free_only_topics.length - 30} more</span>
+                ` : ''}
+              </div>
+            </div>
+          ` : ''}
+        ` : ''}
 
         <!-- Stats Grid -->
         <div class="stats-grid">

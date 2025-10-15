@@ -210,6 +210,7 @@ function analyzeUniqueness(meltwaterArticles, otherArticles) {
     duplicate_examples: [],
     meltwater_only_domains: new Set(),
     shared_domains: new Set(),
+    debug_sample_comparisons: [], // For debugging
   };
 
   // Track all domains
@@ -224,7 +225,7 @@ function analyzeUniqueness(meltwaterArticles, otherArticles) {
   });
 
   // Analyze each Meltwater article
-  meltwaterArticles.forEach((mw) => {
+  meltwaterArticles.forEach((mw, mwIndex) => {
     let bestMatch = null;
     let bestSimilarity = 0;
     let isSameSourceMatch = false;
@@ -249,6 +250,17 @@ function analyzeUniqueness(meltwaterArticles, otherArticles) {
         bestMatch = other;
       }
     });
+
+    // Log first 5 comparisons for debugging
+    if (mwIndex < 5) {
+      analysis.debug_sample_comparisons.push({
+        meltwater_title: mw.title?.substring(0, 100),
+        best_match_title: bestMatch?.title?.substring(0, 100),
+        similarity_score: Math.round(bestSimilarity * 100),
+        mw_summary_length: (mw.summary || '').length,
+        match_summary_length: bestMatch ? (bestMatch.summary || '').length : 0
+      });
+    }
 
     // Track Meltwater domain
     if (mw.link) {

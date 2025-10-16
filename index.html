@@ -1026,7 +1026,7 @@ ${articleText}`;
     // Load flagged articles on page load
     async function loadFlaggedArticles() {
       try {
-        const res = await fetch('/api/flag_article', { method: 'GET' });
+        const res = await fetch('/api/get_flagged', { cache: 'no-store' });
         if (!res.ok) return;
 
         const data = await res.json();
@@ -1059,12 +1059,12 @@ ${articleText}`;
         // Show loading
         showLoadingSkeletons(3);
 
-        // Fetch flagged articles from API (not from local cache)
-        const res = await fetch('/api/flag_article', { method: 'GET', cache: 'no-store' });
+        // Fetch flagged articles from NEW endpoint to bypass cache
+        const res = await fetch('/api/get_flagged', { cache: 'no-store' });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
         const data = await res.json();
-        console.log('Flagged articles API response:', data);
+        console.log('Flagged articles API response (from get_flagged):', data);
         console.log('data.ok:', data.ok, 'data.articles:', data.articles, 'length:', data.articles?.length);
 
         removeLoadingSkeletons();

@@ -101,8 +101,8 @@ export default async function handler(req, res) {
       });
 
     } else if (req.method === "GET") {
-      // Get all flagged articles
-      console.log(`GET: Fetching flagged articles from Redis`);
+      // Get all flagged articles (v2 - fixed hmget handling)
+      console.log(`GET v2: Fetching flagged articles from Redis`);
       console.log(`GET: Using FLAGGED_SET="${FLAGGED_SET}" and FLAGGED_HASH="${FLAGGED_HASH}"`);
 
       // Get all article IDs from Set

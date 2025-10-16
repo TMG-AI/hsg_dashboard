@@ -118,12 +118,16 @@ export default async function handler(req, res) {
         });
       }
 
-      // Get article data from Hash
-      const articleData = await redis.hmget(FLAGGED_HASH, ...articleIds) || [];
-      console.log(`GET: Retrieved ${articleData ? articleData.length : 0} articles from Hash`);
+      // Get article data from Hash - use hgetall for object response or hmget for array
+      const articleData = await redis.hmget(FLAGGED_HASH, ...articleIds);
+      console.log(`GET: Retrieved articleData:`, typeof articleData, Array.isArray(articleData), JSON.stringify(articleData)?.substring(0, 200));
+
+      // Convert to array if it's an object
+      const dataArray = Array.isArray(articleData) ? articleData : (articleData ? Object.values(articleData) : []);
+      console.log(`GET: dataArray length: ${dataArray.length}`);
 
       // Parse JSON strings and filter out nulls
-      const articles = (articleData || [])
+      const articles = dataArray
         .map((dataStr, index) => {
           if (!dataStr) {
             console.warn(`GET: No data found in Hash for article ID: ${articleIds[index]}`);

@@ -15,7 +15,7 @@ export default async function handler(req, res) {
     const setMembers = await redis.smembers(FLAGGED_SET);
 
     // Get all fields from the Hash
-    const hashKeys = await redis.hkeys(FLAGGED_HASH);
+    const hashKeys = await redis.hkeys(FLAGGED_HASH) || [];
     const hashValues = hashKeys.length > 0 ? await redis.hmget(FLAGGED_HASH, ...hashKeys) : [];
 
     // Get Set cardinality
@@ -32,11 +32,13 @@ export default async function handler(req, res) {
       set_members: setMembers,
       hash_length: hashLen,
       hash_keys: hashKeys,
-      hash_sample: hashValues.slice(0, 2), // First 2 values
+      hash_sample: Array.isArray(hashValues) ? hashValues.slice(0, 2) : [hashValues],
       diagnosis: {
         set_has_members: setMembers && setMembers.length > 0,
         hash_has_data: hashKeys && hashKeys.length > 0,
-        keys_match: JSON.stringify(setMembers?.sort()) === JSON.stringify(hashKeys?.sort())
+        keys_match: JSON.stringify((setMembers || []).sort()) === JSON.stringify((hashKeys || []).sort()),
+        hashValues_type: typeof hashValues,
+        hashValues_isArray: Array.isArray(hashValues)
       }
     });
 

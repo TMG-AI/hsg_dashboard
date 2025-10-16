@@ -32,13 +32,18 @@ export default async function handler(req, res) {
     // Extract articles for the IDs we have
     const articles = articleIds
       .map(id => {
-        const dataStr = allHashData?.[id];
-        if (!dataStr) {
+        const data = allHashData?.[id];
+        if (!data) {
           console.warn(`No data for article ID: ${id}`);
           return null;
         }
+        // Upstash auto-deserializes, so data might already be an object
+        if (typeof data === 'object') {
+          return data;
+        }
+        // If it's a string, parse it
         try {
-          return JSON.parse(dataStr);
+          return JSON.parse(data);
         } catch (e) {
           console.error(`Failed to parse article ${id}:`, e);
           return null;

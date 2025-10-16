@@ -117,11 +117,11 @@ export default async function handler(req, res) {
       }
 
       // Get article data from Hash
-      const articleData = await redis.hmget(FLAGGED_HASH, ...articleIds);
-      console.log(`GET: Retrieved ${articleData.length} articles from Hash`);
+      const articleData = await redis.hmget(FLAGGED_HASH, ...articleIds) || [];
+      console.log(`GET: Retrieved ${articleData ? articleData.length : 0} articles from Hash`);
 
       // Parse JSON strings and filter out nulls
-      const articles = articleData
+      const articles = (articleData || [])
         .map((dataStr, index) => {
           if (!dataStr) {
             console.warn(`GET: No data found in Hash for article ID: ${articleIds[index]}`);

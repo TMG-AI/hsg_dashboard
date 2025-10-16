@@ -37,21 +37,24 @@ export default async function handler(req, res) {
     const sevenDaysAgo = now - (7 * 24 * 60 * 60);
 
     const raw = await redis.zrange(ZSET, sevenDaysAgo, now, { byScore: true });
-    const articles = raw.map(toObj).filter(Boolean);
+    const allArticles = raw.map(toObj).filter(Boolean);
 
-    console.log(`Chat: Loading ${articles.length} articles for context`);
+    console.log(`Chat: Found ${allArticles.length} articles total`);
 
-    // Prepare article context (limit to key info to save tokens)
+    // Limit to most recent 200 articles to avoid token limits
+    const articles = allArticles.slice(0, 200);
+    console.log(`Chat: Using ${articles.length} most recent articles for context`);
+
+    // Prepare article context (title and source only to save tokens)
     const articleContext = articles.map(a => ({
       title: a.title,
       source: a.source,
-      published: a.published,
-      origin: a.origin,
-      summary: a.summary?.substring(0, 200) // Limit summary length
+      origin: a.origin
+      // Removed: published date and summary to reduce token usage
     }));
 
-    // Count articles by origin
-    const originCounts = articles.reduce((acc, a) => {
+    // Count articles by origin (from all articles, not just the limited set)
+    const originCounts = allArticles.reduce((acc, a) => {
       const origin = a.origin || 'unknown';
       acc[origin] = (acc[origin] || 0) + 1;
       return acc;
@@ -69,7 +72,7 @@ export default async function handler(req, res) {
         messages: [
           {
             role: 'system',
-            content: `You are an expert analyst helping with China media monitoring. You have access to ${articles.length} recent articles about China from the past 7 days.
+            content: `You are an expert analyst helping with China media monitoring. You have access to ${allArticles.length} recent articles about China from the past 7 days.
 
 Article breakdown by source:
 - Google Alerts: ${originCounts.google_alerts || 0} articles
@@ -88,7 +91,7 @@ FORMATTING REQUIREMENTS:
 - Write in a flowing narrative style, not rigid categories
 - Prioritize readability and natural flow over structured formatting
 
-Available articles:
+Sample of most recent articles (${articles.length} of ${allArticles.length} shown):
 ${JSON.stringify(articleContext, null, 2)}`
           },
           {

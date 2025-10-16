@@ -199,10 +199,6 @@ export default async function handler(req, res) {
 
           await redis.zadd(ZSET, { score: ts, member: JSON.stringify(m) });
 
-          // Trim articles older than RETENTION_DAYS
-          const cutoffTimestamp = Math.floor(Date.now() / 1000) - (RETENTION_DAYS * 24 * 60 * 60);
-          await redis.zremrangebyscore(ZSET, '-inf', cutoffTimestamp);
-
           stored++;
           console.log(`[Newsletter RSS] Stored: "${title}" from ${feedTitle} (matched: ${matched.join(", ")})`);
         }
@@ -211,6 +207,10 @@ export default async function handler(req, res) {
         errors.push({ url, error: err?.message || String(err) });
       }
     }
+
+    // Trim articles older than RETENTION_DAYS (once after all feeds)
+    const cutoffTimestamp = Math.floor(Date.now() / 1000) - (RETENTION_DAYS * 24 * 60 * 60);
+    await redis.zremrangebyscore(ZSET, '-inf', cutoffTimestamp);
 
     console.log(`Newsletter RSS collection complete: ${found} China-related articles found, ${stored} stored, ${skipped} skipped`);
 

@@ -187,16 +187,17 @@ export default async function handler(req, res) {
           if (ENABLE_SENTIMENT) m.sentiment = sentimentScore(`${title} ${sum}`);
           await redis.zadd(ZSET, { score: ts, member: JSON.stringify(m) });
 
-          // Trim articles older than RETENTION_DAYS
-          const cutoffTimestamp = Math.floor(Date.now() / 1000) - (RETENTION_DAYS * 24 * 60 * 60);
-          await redis.zremrangebyscore(ZSET, '-inf', cutoffTimestamp);
-
           found++; stored++;
         }
       } catch (err) {
         errors.push({ url, error: err?.message || String(err) });
       }
     }
+
+    // Trim articles older than RETENTION_DAYS (once after all feeds)
+    const cutoffTimestamp = Math.floor(Date.now() / 1000) - (RETENTION_DAYS * 24 * 60 * 60);
+    await redis.zremrangebyscore(ZSET, '-inf', cutoffTimestamp);
+
     res.status(200).json({ ok:true, feeds: RSS_FEEDS.length, found, stored, emailed, errors });
   } catch (e) {
     res.status(500).json({ ok:false, error:`collect failed: ${e?.message || e}` });

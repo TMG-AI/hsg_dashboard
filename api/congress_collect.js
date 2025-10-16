@@ -214,16 +214,16 @@ export default async function handler(req, res) {
         // Store in Redis
         await redis.zadd(ZSET, { score: ts, member: JSON.stringify(m) });
 
-        // Trim articles older than RETENTION_DAYS
-        const cutoffTimestamp = Math.floor(Date.now() / 1000) - (RETENTION_DAYS * 24 * 60 * 60);
-        await redis.zremrangebyscore(ZSET, '-inf', cutoffTimestamp);
-
         stored++;
       } catch (err) {
         console.error(`Error processing bill ${bill.number}:`, err);
         errors.push({ bill: bill.number, error: err?.message || String(err) });
       }
     }
+
+    // Trim articles older than RETENTION_DAYS (once after loop)
+    const cutoffTimestamp = Math.floor(Date.now() / 1000) - (RETENTION_DAYS * 24 * 60 * 60);
+    await redis.zremrangebyscore(ZSET, '-inf', cutoffTimestamp);
 
     console.log(`Congress collection complete: ${found} matched, ${stored} stored`);
 

@@ -60,35 +60,21 @@ export default async function handler(req, res) {
       };
 
       console.log(`POST: Storing flagged article (first 300 chars):`, JSON.stringify(flaggedArticle).substring(0, 300));
-      console.log(`POST: Article ID to store: "${article_id}" (type: ${typeof article_id})`);
-      console.log(`POST: FLAGGED_SET key = "${FLAGGED_SET}"`);
-      console.log(`POST: FLAGGED_HASH key = "${FLAGGED_HASH}"`);
 
       // Store article ID in Set and full data in Hash
       const saddResult = await redis.sadd(FLAGGED_SET, article_id);
-      const hsetResult = await redis.hset(FLAGGED_HASH, article_id, JSON.stringify(flaggedArticle));
+      await redis.hset(FLAGGED_HASH, article_id, JSON.stringify(flaggedArticle));
 
       console.log(`POST: SADD result: ${saddResult} (1 = new member, 0 = already existed)`);
-      console.log(`POST: HSET result: ${hsetResult}`);
 
       // Verify it was added
       const verifyCount = await redis.scard(FLAGGED_SET);
       console.log(`POST: Total flagged articles in Redis after add: ${verifyCount}`);
 
-      // Also verify by reading back
-      const verifyIds = await redis.smembers(FLAGGED_SET);
-      console.log(`POST: Verification - Set members:`, JSON.stringify(verifyIds));
-
       return res.status(200).json({
         ok: true,
         message: "Article flagged for intern summary",
-        article_id,
-        debug: {
-          sadd_result: saddResult,
-          hset_result: hsetResult,
-          set_count: verifyCount,
-          set_members: verifyIds
-        }
+        article_id
       });
 
     } else if (req.method === "DELETE") {
@@ -117,13 +103,10 @@ export default async function handler(req, res) {
     } else if (req.method === "GET") {
       // Get all flagged articles
       console.log(`GET: Fetching flagged articles from Redis`);
-      console.log(`GET: FLAGGED_SET key = "${FLAGGED_SET}"`);
-      console.log(`GET: FLAGGED_HASH key = "${FLAGGED_HASH}"`);
 
       // Get all article IDs from Set
       const articleIds = await redis.smembers(FLAGGED_SET) || [];
       console.log(`GET: Retrieved ${articleIds.length} flagged article IDs from Set`);
-      console.log(`GET: Article IDs:`, JSON.stringify(articleIds));
 
       if (!articleIds || articleIds.length === 0) {
         return res.status(200).json({

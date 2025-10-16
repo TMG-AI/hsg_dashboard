@@ -103,10 +103,12 @@ export default async function handler(req, res) {
     } else if (req.method === "GET") {
       // Get all flagged articles
       console.log(`GET: Fetching flagged articles from Redis`);
+      console.log(`GET: Using FLAGGED_SET="${FLAGGED_SET}" and FLAGGED_HASH="${FLAGGED_HASH}"`);
 
       // Get all article IDs from Set
       const articleIds = await redis.smembers(FLAGGED_SET) || [];
       console.log(`GET: Retrieved ${articleIds.length} flagged article IDs from Set`);
+      console.log(`GET: Article IDs:`, JSON.stringify(articleIds));
 
       if (!articleIds || articleIds.length === 0) {
         return res.status(200).json({

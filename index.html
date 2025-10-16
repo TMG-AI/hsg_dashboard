@@ -1060,14 +1060,17 @@ ${articleText}`;
         showLoadingSkeletons(3);
 
         // Fetch flagged articles from API (not from local cache)
-        const res = await fetch('/api/flag_article', { method: 'GET' });
+        const res = await fetch('/api/flag_article', { method: 'GET', cache: 'no-store' });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
         const data = await res.json();
+        console.log('Flagged articles API response:', data);
+        console.log('data.ok:', data.ok, 'data.articles:', data.articles, 'length:', data.articles?.length);
 
         removeLoadingSkeletons();
 
         if (!data.ok || !data.articles || data.articles.length === 0) {
+          console.log('Showing empty state because:', { ok: data.ok, hasArticles: !!data.articles, length: data.articles?.length });
           list.innerHTML = `
             <div class="empty-state">
               <div class="empty-state-icon"></div>

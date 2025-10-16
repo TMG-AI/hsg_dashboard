@@ -63,7 +63,7 @@ export default async function handler(req, res) {
 
       // Store article ID in Set and full data in Hash
       const saddResult = await redis.sadd(FLAGGED_SET, article_id);
-      await redis.hset(FLAGGED_HASH, article_id, JSON.stringify(flaggedArticle));
+      await redis.hset(FLAGGED_HASH, { [article_id]: JSON.stringify(flaggedArticle) });
 
       console.log(`POST: SADD result: ${saddResult} (1 = new member, 0 = already existed)`);
 

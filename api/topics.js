@@ -57,14 +57,19 @@ export default async function handler(req, res) {
       });
     }
 
+    // Limit to 300 most recent articles to avoid token limits and timeouts
+    const articlesToAnalyze = articles.slice(0, 300);
+
     // Prepare article data for clustering (titles only for efficiency)
-    const articleData = articles.map((a, idx) => ({
+    const articleData = articlesToAnalyze.map((a, idx) => ({
       idx: idx,
       id: a.id,
       title: a.title,
       source: a.source,
       published: a.published
     }));
+
+    console.log(`Analyzing ${articleData.length} articles (limited from ${articles.length} total)`);
 
     // Ask OpenAI to cluster articles into topics
     const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -127,11 +132,43 @@ Guidelines:
     }
 
     const data = await openaiResponse.json();
-    const clusteringResult = JSON.parse(data.choices[0]?.message?.content || '{"topics":[]}');
+
+    // Better error handling for OpenAI response
+    if (!data.choices || !data.choices[0] || !data.choices[0].message || !data.choices[0].message.content) {
+      console.error('Invalid OpenAI response structure:', JSON.stringify(data));
+      return res.status(500).json({
+        error: 'OpenAI returned invalid response structure',
+        details: 'No content in response'
+      });
+    }
+
+    const contentStr = data.choices[0].message.content.trim();
+    if (!contentStr) {
+      return res.status(500).json({
+        error: 'OpenAI returned empty content'
+      });
+    }
+
+    let clusteringResult;
+    try {
+      clusteringResult = JSON.parse(contentStr);
+    } catch (parseError) {
+      console.error('Failed to parse OpenAI response:', contentStr.substring(0, 500));
+      return res.status(500).json({
+        error: 'Failed to parse OpenAI JSON response',
+        details: parseError.message
+      });
+    }
+
+    if (!clusteringResult.topics || !Array.isArray(clusteringResult.topics)) {
+      return res.status(500).json({
+        error: 'OpenAI response missing topics array'
+      });
+    }
 
     // Build topic objects with full article data
     const topics = clusteringResult.topics.map(topic => {
-      const topicArticles = topic.article_indices.map(idx => articles[idx]).filter(Boolean);
+      const topicArticles = topic.article_indices.map(idx => articlesToAnalyze[idx]).filter(Boolean);
 
       return {
         name: topic.name,

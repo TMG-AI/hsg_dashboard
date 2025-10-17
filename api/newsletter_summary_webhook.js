@@ -77,7 +77,8 @@ export default async function handler(req, res) {
       // Process each article from this newsletter
       for (const article of articles) {
         try {
-          const title = article.title || "Untitled";
+          // Use headline field (from n8n) or title field
+          const title = article.headline || article.title || "Newsletter Article";
           const summary = article.summary || "";
           const link = article.link || article.url || null;
 
@@ -93,7 +94,7 @@ export default async function handler(req, res) {
           }
 
           // If there's a link, also check canonical URL deduplication
-          if (link) {
+          if (link && link.startsWith('http')) {
             const addLink = await redis.sadd(SEEN_LINK, link);
             if (addLink !== 1) {
               console.log(`Skipping duplicate link: ${link}`);
@@ -105,7 +106,7 @@ export default async function handler(req, res) {
           const m = {
             id: articleId,
             title: `${newsletterName}: ${title}`,
-            link: link || `https://newsletter.internal/${newsletterName.replace(/\s+/g, '-').toLowerCase()}/${articleId}`,
+            link: link && link.startsWith('http') ? link : null, // Only include valid URLs
             source: newsletterName,
             provider: newsletterName,
             summary: summary,
@@ -114,7 +115,8 @@ export default async function handler(req, res) {
             published_ts: now,
             published: new Date(now * 1000).toISOString(),
             reach: 0,
-            newsletter_summary: true // Flag to indicate this came from summary webhook
+            newsletter_summary: true, // Flag to indicate this came from summary webhook
+            no_link: !link || !link.startsWith('http') // Flag for articles without links
           };
 
           // Store in Redis

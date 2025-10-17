@@ -473,6 +473,14 @@
           // Check if article is flagged
           const isFlagged = flaggedArticles.has(article.id);
 
+          // Check if this is a newsletter summary article (no link)
+          const isNewsletterSummary = article.newsletter_summary === true || article.no_link === true;
+
+          // Choose title color and clickability
+          const titleColor = isNewsletterSummary ? '#FF6B35' : '#1a1a1a'; // Orange for newsletter summaries
+          const titleTag = isNewsletterSummary ? 'span' : 'a';
+          const titleHref = isNewsletterSummary ? '' : `href="${article.link}" target="_blank" rel="noopener"`;
+
           // Create card structure
           div.innerHTML=`
             <div class="card-content">
@@ -485,10 +493,10 @@
                        data-article-source="${article.source}"
                        ${isFlagged ? 'checked' : ''}
                        title="Flag for intern summary">
-                <h3 class="card-title" style="flex:1;margin:0"><a href="${article.link}" target="_blank" rel="noopener"></a></h3>
+                <h3 class="card-title" style="flex:1;margin:0;color:${titleColor}"><${titleTag} ${titleHref} style="color:${titleColor};${isNewsletterSummary ? 'cursor:default;' : ''}"></${titleTag}></h3>
               </div>
               <div class="meta">
-                <div>${article.source || article.provider || 'Newsletter'} · ${formatDate(article.published)}</div>
+                <div>${article.source || article.provider || 'Newsletter'} · ${formatDate(article.published)}${isNewsletterSummary ? ' · <span style="color:#FF6B35;font-weight:600;">Newsletter Summary</span>' : ''}</div>
               </div>
               ${summary}
             </div>`;

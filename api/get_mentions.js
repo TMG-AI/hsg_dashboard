@@ -209,7 +209,9 @@ export default async function handler(req, res) {
       summary: m.summary || "",
       reach: m.reach || 0,
       sentiment: m.sentiment,
-      sentiment_label: m.sentiment_label || null
+      sentiment_label: m.sentiment_label || null,
+      newsletter_summary: m.newsletter_summary || false,
+      no_link: m.no_link || false
     }));
 
     console.log(`Returning ${out.length} total items`);

@@ -212,6 +212,63 @@
 .spike-pct{font-size:20px;font-weight:800;color:#a05a11}
 .spike-title{margin:0 0 6px 0;font-size:14px;font-weight:600;color:#1a1a1a}
 .spike-meta{margin:0;font-size:12px;color:#555}
+
+/* Topic Clustering UI */
+.topic-card{
+  background:#fff;
+  border-radius:12px;
+  box-shadow:0 2px 12px rgba(0,0,0,.06);
+  border:1px solid rgba(139,195,74,.12);
+  padding:20px;
+  margin-bottom:16px;
+  cursor:pointer;
+  transition:.3s;
+}
+.topic-card:hover{
+  transform:translateY(-2px);
+  box-shadow:0 6px 20px rgba(0,0,0,.1);
+  border-color:rgba(139,195,74,.35);
+}
+.topic-header{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-bottom:12px;
+}
+.topic-name{
+  font-size:18px;
+  font-weight:700;
+  color:#1a1a1a;
+  margin:0;
+}
+.topic-count{
+  background:linear-gradient(135deg,#4a6741,#5a7c50);
+  color:#fff;
+  padding:6px 14px;
+  border-radius:20px;
+  font-size:14px;
+  font-weight:600;
+}
+.topic-summary{
+  color:#666;
+  font-size:14px;
+  line-height:1.6;
+  margin:0;
+}
+.back-to-topics{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  color:#4a6741;
+  font-weight:600;
+  cursor:pointer;
+  margin-bottom:16px;
+  padding:8px 0;
+  transition:.2s;
+}
+.back-to-topics:hover{
+  color:#5a7c50;
+}
   </style>
 </head>
 <body>
@@ -233,6 +290,8 @@
   <!-- Navigation Bar -->
   <nav class="nav-bar">
     <div class="nav-content">
+      <button class="nav-item active" id="nav-all-articles" onclick="showAllArticles()">All Articles</button>
+      <button class="nav-item" id="nav-topics" onclick="showTopics()">View by Topics</button>
       <a href="/client-summaries.html" class="nav-item">Client Summaries</a>
       <button class="nav-item" onclick="showFlaggedArticles()">Flagged Articles (<span id="nav-flagged-count">0</span>)</button>
     </div>
@@ -1101,6 +1160,122 @@ ${articleText}`;
 
     // Make function globally accessible
     window.showFlaggedArticles = showFlaggedArticles;
+
+    // Topic Clustering Functions
+    let cachedTopics = null;
+    let currentView = 'articles'; // 'articles', 'topics', or 'topic-detail'
+    let currentTopicData = null;
+
+    async function showTopics() {
+      // Update navigation
+      document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
+      document.getElementById('nav-topics').classList.add('active');
+
+      currentView = 'topics';
+      const list = document.getElementById('list');
+      const sectionTitle = document.querySelector('.section-title');
+
+      sectionTitle.textContent = 'Browse by Topic';
+
+      try {
+        showLoadingSkeletons(3);
+
+        // Fetch topics from API (cached for 1 hour on server)
+        const res = await fetch('/api/topics?days=7', { cache: 'no-store' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        const data = await res.json();
+        removeLoadingSkeletons();
+
+        if (!data.ok || !data.topics || data.topics.length === 0) {
+          list.innerHTML = `
+            <div class="empty-state">
+              <div class="empty-state-icon"></div>
+              <h3>No topics generated yet</h3>
+              <p>Topics are generated from recent articles. Try again later.</p>
+              <button class="action-btn" onclick="showAllArticles()">View All Articles</button>
+            </div>`;
+          return;
+        }
+
+        cachedTopics = data.topics;
+
+        // Display topic cards
+        list.innerHTML = '';
+        document.getElementById('err').style.display = 'none';
+
+        data.topics.forEach((topic, index) => {
+          const card = document.createElement('div');
+          card.className = 'topic-card';
+          card.style.animationDelay = `${index * 0.1}s`;
+          card.onclick = () => showTopicDetail(topic);
+
+          card.innerHTML = `
+            <div class="topic-header">
+              <h3 class="topic-name">${escapeHtml(topic.name)}</h3>
+              <div class="topic-count">${topic.article_count} articles</div>
+            </div>
+            <p class="topic-summary">${escapeHtml(topic.summary)}</p>
+          `;
+
+          list.appendChild(card);
+        });
+
+      } catch (error) {
+        removeLoadingSkeletons();
+        list.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon"></div>
+            <h3>Error loading topics</h3>
+            <p>${error.message}</p>
+            <button class="action-btn" onclick="showAllArticles()">View All Articles</button>
+          </div>`;
+        console.error('Error loading topics:', error);
+      }
+    }
+
+    async function showTopicDetail(topic) {
+      currentView = 'topic-detail';
+      currentTopicData = topic;
+
+      const list = document.getElementById('list');
+      const sectionTitle = document.querySelector('.section-title');
+
+      sectionTitle.innerHTML = `
+        <span class="back-to-topics" onclick="showTopics()" style="cursor:pointer;">← Back to Topics</span>
+      `;
+
+      // Display articles in this topic
+      list.innerHTML = '';
+      document.getElementById('err').style.display = 'none';
+
+      // Add topic summary card at the top
+      const summaryCard = document.createElement('div');
+      summaryCard.style.cssText = 'background:#fff;border-radius:12px;padding:20px;margin-bottom:20px;border:1px solid rgba(139,195,74,.25);box-shadow:0 2px 12px rgba(0,0,0,.06)';
+      summaryCard.innerHTML = `
+        <h2 style="margin:0 0 12px 0;font-size:24px;font-weight:700;color:#1a1a1a">${escapeHtml(topic.name)}</h2>
+        <p style="color:#666;font-size:15px;line-height:1.6;margin:0">${escapeHtml(topic.summary)}</p>
+        <div style="margin-top:12px;color:#999;font-size:13px">${topic.article_count} articles in this topic</div>
+      `;
+      list.appendChild(summaryCard);
+
+      // Display all articles in topic
+      for (let i = 0; i < topic.articles.length; i++) {
+        await addArticleCard(list, topic.articles[i], i * 0.05);
+      }
+    }
+
+    function showAllArticles() {
+      // Update navigation
+      document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
+      document.getElementById('nav-all-articles').classList.add('active');
+
+      currentView = 'articles';
+      const sectionTitle = document.querySelector('.section-title');
+      sectionTitle.textContent = 'Recent Mentions';
+
+      loadMentions();
+    }
 
     // Initialize
     loadFlaggedArticles().then(() => loadMentions());

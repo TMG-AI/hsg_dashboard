@@ -41,37 +41,11 @@ function normalizeTitle(title) {
   return normalized;
 }
 
-// Calculate similarity between two strings (Levenshtein distance ratio)
-function similarity(s1, s2) {
-  const longer = s1.length > s2.length ? s1 : s2;
-  const shorter = s1.length > s2.length ? s2 : s1;
-
-  if (longer.length === 0) return 1.0;
-
-  const editDistance = levenshtein(longer, shorter);
-  return (longer.length - editDistance) / longer.length;
-}
-
-// Levenshtein distance algorithm
-function levenshtein(s1, s2) {
-  const costs = [];
-  for (let i = 0; i <= s1.length; i++) {
-    let lastValue = i;
-    for (let j = 0; j <= s2.length; j++) {
-      if (i === 0) {
-        costs[j] = j;
-      } else if (j > 0) {
-        let newValue = costs[j - 1];
-        if (s1.charAt(i - 1) !== s2.charAt(j - 1)) {
-          newValue = Math.min(Math.min(newValue, lastValue), costs[j]) + 1;
-        }
-        costs[j - 1] = lastValue;
-        lastValue = newValue;
-      }
-    }
-    if (i > 0) costs[s2.length] = lastValue;
-  }
-  return costs[s2.length];
+// Fast fingerprint for exact matching (first 100 chars of normalized title)
+function fingerprint(title) {
+  const normalized = normalizeTitle(title);
+  // Take first 100 chars and create a simple hash
+  return normalized.substring(0, 100);
 }
 
 export default async function handler(req, res) {
@@ -87,36 +61,25 @@ export default async function handler(req, res) {
 
     console.log(`Total articles: ${allArticles.length}`);
 
-    // Group articles by normalized title
+    // Group articles by fingerprint (fast exact matching on first 100 chars)
     const titleGroups = new Map();
     const duplicates = [];
 
     for (const article of allArticles) {
-      const normalizedTitle = normalizeTitle(article.title);
+      const fp = fingerprint(article.title);
 
-      if (!normalizedTitle) continue;
+      if (!fp) continue;
 
-      // Check if this title is similar to any existing group
-      let foundGroup = false;
-
-      for (const [groupTitle, articles] of titleGroups.entries()) {
-        const sim = similarity(normalizedTitle, groupTitle);
-
-        if (sim >= threshold) {
-          // Similar title found - add to this group
-          articles.push(article);
-          foundGroup = true;
-          break;
-        }
-      }
-
-      if (!foundGroup) {
-        // New unique title - create new group
-        titleGroups.set(normalizedTitle, [article]);
+      if (titleGroups.has(fp)) {
+        // Duplicate found - add to existing group
+        titleGroups.get(fp).push(article);
+      } else {
+        // New unique fingerprint - create new group
+        titleGroups.set(fp, [article]);
       }
     }
 
-    console.log(`Found ${titleGroups.size} unique title groups`);
+    console.log(`Found ${titleGroups.size} unique title fingerprints`);
 
     // Find duplicates (groups with more than 1 article)
     const duplicateGroups = [];
@@ -135,7 +98,7 @@ export default async function handler(req, res) {
         const remove = articles.slice(1);
 
         duplicateGroups.push({
-          normalized_title: normalizedTitle,
+          fingerprint: normalizedTitle.substring(0, 80) + '...',
           original_title: keep.title,
           keep: {
             id: keep.id,

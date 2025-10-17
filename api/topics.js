@@ -57,8 +57,8 @@ export default async function handler(req, res) {
       });
     }
 
-    // Limit to 600 most recent articles to avoid token limits and timeouts
-    const articlesToAnalyze = articles.slice(0, 600);
+    // Limit to 450 most recent articles to avoid token limits and timeouts
+    const articlesToAnalyze = articles.slice(0, 450);
 
     // Prepare article data for clustering (titles only for efficiency)
     const articleData = articlesToAnalyze.map((a, idx) => ({

@@ -133,6 +133,12 @@ export default async function handler(req, res) {
           extractedSource = 'Meltwater';
         }
 
+        // FILTER: Skip AP News Summary articles
+        if (extractedTitle.toLowerCase().includes('ap news summary')) {
+          console.log(`Skipping AP News Summary article: ${extractedTitle}`);
+          continue;
+        }
+
         const mention = {
           id: `mw_stream_${doc.id || doc.external_id || timestamp}_${Math.random()}`,
           title: extractedTitle,

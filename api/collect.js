@@ -159,6 +159,12 @@ export default async function handler(req, res) {
           const sum = ytDesc || e.contentSnippet || e.content || e.summary || "";
           const link = extractItemLink(e);
 
+          // FILTER: Skip AP News Summary articles
+          if (title.toLowerCase().includes('ap news summary')) {
+            console.log(`Skipping AP News Summary article: ${title}`);
+            continue;
+          }
+
           // No keyword filtering - accept all articles
           const canon = normalizeUrl(link || title);
           if (!canon) continue;

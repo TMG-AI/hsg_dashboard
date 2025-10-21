@@ -39,10 +39,15 @@ export default async function handler(req, res) {
     const raw = await redis.zrange(ZSET, sevenDaysAgo, now, { byScore: true });
     const allArticles = raw.map(toObj).filter(Boolean);
 
-    // Limit to 500 most recent articles to avoid token limits (gpt-4o-mini has 128k context)
-    const articles = allArticles.slice(-500);
+    // Filter out Meltwater articles (removed from dashboard)
+    const nonMeltwaterArticles = allArticles.filter(a =>
+      a.origin !== 'meltwater' && a.section !== 'Meltwater'
+    );
 
-    console.log(`Chat: Loading ${articles.length} of ${allArticles.length} articles for context`);
+    // Limit to 500 most recent articles to avoid token limits (gpt-4o-mini has 128k context)
+    const articles = nonMeltwaterArticles.slice(-500);
+
+    console.log(`Chat: Loading ${articles.length} articles for context (${nonMeltwaterArticles.length} after filtering Meltwater from ${allArticles.length} total)`);
 
     // Prepare article context (title, source, and short summary)
     const articleContext = articles.map(a => ({
@@ -78,6 +83,8 @@ Article breakdown by source:
 - Congress Bills: ${originCounts.congress || 0} bills
 - Newsletters: ${originCounts.newsletter || 0} articles
 ${originCounts.newsletter ? '' : '\nNote: There are NO newsletter articles in this dataset - do not mention newsletters in your response.'}
+
+Note: Meltwater articles are excluded from this analysis.
 
 Answer questions about trends, key topics, sentiment, or specific articles. ONLY discuss sources that have articles available (non-zero count).
 

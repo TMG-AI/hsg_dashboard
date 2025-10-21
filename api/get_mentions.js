@@ -166,8 +166,15 @@ export default async function handler(req, res) {
     let finalItems = redisItems;
 
     // 3. Apply filters
+    // Filter out Meltwater by default (removed from dashboard) unless explicitly requested
     if (origin) {
       finalItems = finalItems.filter(m => (m.origin || "").toLowerCase() === origin);
+    } else {
+      // Exclude Meltwater when no specific origin is requested
+      finalItems = finalItems.filter(m =>
+        (m.origin || "").toLowerCase() !== 'meltwater' &&
+        (m.section || "") !== 'Meltwater'
+      );
     }
     if (section) {
       finalItems = finalItems.filter(m => (m.section || "") === section);

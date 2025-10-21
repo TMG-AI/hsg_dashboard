@@ -37,9 +37,12 @@ export default async function handler(req, res) {
     const sevenDaysAgo = now - (7 * 24 * 60 * 60);
 
     const raw = await redis.zrange(ZSET, sevenDaysAgo, now, { byScore: true });
-    const articles = raw.map(toObj).filter(Boolean);
+    const allArticles = raw.map(toObj).filter(Boolean);
 
-    console.log(`Chat: Loading ${articles.length} articles for context`);
+    // Limit to 500 most recent articles to avoid token limits (gpt-4o-mini has 128k context)
+    const articles = allArticles.slice(-500);
+
+    console.log(`Chat: Loading ${articles.length} of ${allArticles.length} articles for context`);
 
     // Prepare article context (title, source, and short summary)
     const articleContext = articles.map(a => ({

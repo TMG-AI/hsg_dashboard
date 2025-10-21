@@ -40,12 +40,15 @@ export default async function handler(req, res) {
     const allArticles = raw.map(toObj).filter(Boolean);
 
     // Filter for ONLY Meltwater articles with searchid 27861003
-    const meltwaterArticles = allArticles.filter(a =>
+    const allMeltwaterArticles = allArticles.filter(a =>
       (a.origin === 'meltwater' || a.section === 'Meltwater') &&
       (a.searchid === '27861003' || a.search_id === '27861003')
     );
 
-    console.log(`Meltwater Chat: Loading ${meltwaterArticles.length} Meltwater articles for context (filtered from ${allArticles.length} total)`);
+    // Limit to 500 most recent articles to avoid token limits
+    const meltwaterArticles = allMeltwaterArticles.slice(-500);
+
+    console.log(`Meltwater Chat: Loading ${meltwaterArticles.length} of ${allMeltwaterArticles.length} Meltwater articles for context (filtered from ${allArticles.length} total)`);
 
     // Prepare article context (limit to key info to save tokens)
     const articleContext = meltwaterArticles.map(a => ({

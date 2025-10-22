@@ -133,7 +133,7 @@ function extractKeywords(article) {
 export default async function handler(req, res) {
   try {
     const url = new URL(req.url, "http://localhost");
-    const limit = Math.max(1, Math.min(1000, parseInt(url.searchParams.get("limit") || "300", 10)));
+    const limit = Math.max(1, Math.min(10000, parseInt(url.searchParams.get("limit") || "300", 10)));
     const origin = (url.searchParams.get("origin") || "").toLowerCase().trim();
     const section = (url.searchParams.get("section") || "").trim();
     const q = (url.searchParams.get("q") || "").toLowerCase().trim();

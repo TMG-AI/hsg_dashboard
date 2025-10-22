@@ -358,12 +358,15 @@ export default async function handler(req, res) {
       rate_limited: rateLimited || false
     };
 
+    // Remove Meltwater from by_origin since it's excluded from dashboard
+    const { meltwater, ...by_without_meltwater } = by;
+
     res.status(200).json({
       ok: true,
       window: win === "24h" ? "24h" : "today",
-      totals: { 
-        all: total, 
-        by_origin: by 
+      totals: {
+        all: total,
+        by_origin: by_without_meltwater
       },
       realtime: realtimeStats,
       top_publishers: [],

@@ -913,23 +913,31 @@
       response.style.display = 'none';
       saveSection.style.display = 'none';
 
-      const prompt = `Create a professional client summary for the following article. The article text includes the headline. Follow this exact format:
+      const prompt = `Create a professional client summary for the following article about China-related news. Follow these guidelines:
 
+FORMAT:
 [Article Title]
-Summary: [2-4 sentences covering the key points]
+Summary: [Single paragraph, 3-6 sentences]
 
-Guidelines:
-- Extract the article title from the first line or headline of the pasted text
-- Start the summary with "Summary: "
-- Write 2-4 sentences (typically 3-4)
-- Use professional, factual, neutral tone
-- First sentence: What happened/was announced and when (include specific date if mentioned)
-- Middle sentences: Key details, context, implications
-- Last sentence (if needed): Additional context or reactions
-- Include specific names, titles, roles when mentioned
+CONTENT REQUIREMENTS:
+- Start with the date of the event, announcement, or policy action
+- State what happened, who was involved, and the implications
+- Use clear, journalistic language appropriate for policy reporting
+- Capture important nuances: if policy is contingent, provisional, or under negotiation, note thresholds, deadlines, or pending conditions
+- If the article contains no clear policy shift or significant development, state this explicitly
+
+NAMING CONVENTIONS:
+- U.S. Congress members: Use title + full name + (Party-State-District)
+  Examples: Senator John Hickenlooper (D-CO), Rep. Rick Crawford (R-AR-01), Congresswoman Elise Stefanik (R-NY-21)
+- Do NOT use "U.S." prefix before congressional names
+- Include specific names, titles, and roles for all key figures
+
+STYLE:
+- Professional, factual, neutral tone
 - Focus on actionable facts and key developments
 - Include relevant policy/legislative details
 - Note reactions from stakeholders when significant
+- No bullet points, no external sources, no hyperlinks
 
 Full Article Text (including headline):
 ${articleText}`;

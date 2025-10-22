@@ -54,12 +54,12 @@ export default async function handler(req, res){
     }
 
     // Expected fields from n8n:
-    // - title: Article title
+    // - title / headline / name: Article title
     // - link: Article URL
     // - published_at / isoDate / date: Publication date
     // - source: Newsletter name (optional)
     // - matched_keyword: The keyword that triggered the filter (optional)
-    const title = body.title || body.headline || "(untitled)";
+    const title = body.title || body.headline || body.name || "(untitled)";
     const rawLink = body.link || body.url || "";
     const ts    = toEpoch(body.published_at || body.isoDate || body.date || body.published);
     const source = body.source || body.newsletter || "Newsletter";

@@ -77,8 +77,8 @@ export default async function handler(req, res) {
       // Process each article from this newsletter
       for (const article of articles) {
         try {
-          // Use headline field (from n8n) or title field
-          const title = article.headline || article.title || "Newsletter Article";
+          // Use headline, title, or name field (from n8n)
+          const title = article.headline || article.title || article.name || "Newsletter Article";
           const summary = article.summary || "";
           const link = article.link || article.url || null;
 

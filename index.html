@@ -294,6 +294,8 @@
       <button class="nav-item" id="nav-topics" onclick="showTopics()">View by Topics</button>
       <a href="/client-summaries.html" class="nav-item">Client Summaries</a>
       <button class="nav-item" onclick="showFlaggedArticles()">Flagged Articles (<span id="nav-flagged-count">0</span>)</button>
+      <button class="nav-item" onclick="clearAllFlagged()" style="background:#c44;color:#fff" title="Clear all flagged articles">Clear Flagged</button>
+      <button class="nav-item" onclick="clearAllSummaries()" style="background:#c44;color:#fff" title="Clear all client summaries">Clear Summaries</button>
     </div>
   </nav>
 
@@ -1174,8 +1176,73 @@ ${articleText}`;
       }
     }
 
-    // Make function globally accessible
+    // Clear all flagged articles
+    async function clearAllFlagged() {
+      if (!confirm('Are you sure you want to clear ALL flagged articles? This cannot be undone.')) {
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/clear_flagged', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        const data = await res.json();
+
+        if (data.ok) {
+          // Clear local set
+          flaggedArticles.clear();
+          updateFlaggedCount();
+
+          alert('All flagged articles have been cleared.');
+
+          // Reload articles if currently viewing flagged
+          if (currentFilter === 'flagged') {
+            loadMentions();
+          }
+        } else {
+          throw new Error(data.error || 'Failed to clear flagged articles');
+        }
+      } catch (error) {
+        console.error('Error clearing flagged articles:', error);
+        alert(`Error: ${error.message}`);
+      }
+    }
+
+    // Clear all client summaries
+    async function clearAllSummaries() {
+      if (!confirm('Are you sure you want to clear ALL client summaries? This cannot be undone.')) {
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/clear_client_summaries', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        const data = await res.json();
+
+        if (data.ok) {
+          alert('All client summaries have been cleared.');
+        } else {
+          throw new Error(data.error || 'Failed to clear summaries');
+        }
+      } catch (error) {
+        console.error('Error clearing client summaries:', error);
+        alert(`Error: ${error.message}`);
+      }
+    }
+
+    // Make functions globally accessible
     window.showFlaggedArticles = showFlaggedArticles;
+    window.clearAllFlagged = clearAllFlagged;
+    window.clearAllSummaries = clearAllSummaries;
 
     // Topic Clustering Functions
     let cachedTopics = null;

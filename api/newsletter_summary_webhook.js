@@ -77,10 +77,16 @@ export default async function handler(req, res) {
       // Process each article from this newsletter
       for (const article of articles) {
         try {
+          // Log the article structure to debug missing titles
+          console.log(`Article fields from n8n:`, Object.keys(article));
+          console.log(`Article data sample:`, JSON.stringify(article).substring(0, 300));
+
           // Use headline, title, or name field (from n8n)
           const title = article.headline || article.title || article.name || "Newsletter Article";
           const summary = article.summary || "";
           const link = article.link || article.url || null;
+
+          console.log(`Parsed title: "${title}" from newsletter: ${newsletterName}`);
 
           // Create unique ID from newsletter name + title + date
           const uniqueStr = `${newsletterName}_${title}_${body.date || new Date().toISOString()}`;

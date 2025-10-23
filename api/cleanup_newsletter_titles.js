@@ -17,13 +17,15 @@ function toObj(x) {
 }
 
 function cleanTitle(title, source) {
-  // Remove emojis
-  let cleaned = title.replace(/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/gu, '').trim();
+  let cleaned = title;
 
-  // Remove source prefix if it exists (e.g., "Semafor Flagship: Title" -> "Title")
+  // Remove source prefix FIRST (e.g., "Semafor Flagship: 🟡 Title" -> "🟡 Title")
   if (source && cleaned.startsWith(source + ':')) {
     cleaned = cleaned.substring(source.length + 1).trim();
   }
+
+  // Then remove emojis (e.g., "🟡 Title" -> "Title")
+  cleaned = cleaned.replace(/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/gu, '').trim();
 
   return cleaned;
 }

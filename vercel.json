@@ -3,6 +3,7 @@
   "crons": [
     { "path": "/api/collect", "schedule": "0 * * * *" },
     { "path": "/api/congress_collect", "schedule": "0 * * * *" },
+    { "path": "/api/tracked_bills_collect", "schedule": "0 * * * *" },
     { "path": "/api/newsletter_rss_collect", "schedule": "0 * * * *" },
     { "path": "/api/meltwater_collect", "schedule": "0 13 * * *" }
   ],

@@ -19,10 +19,11 @@ This is a **media monitoring and PR alerting system** that:
 - All functions connect to Upstash Redis for data storage
 
 **Key Components**:
-- `collect.js` - Main RSS collection cron job (runs every 4 hours via vercel.json)
-- `congress_collect.js` - Federal legislation collector (runs every 4 hours)
-- `newsletter_rss_collect.js` - Newsletter RSS collector with China/Chinese filtering (runs every 4 hours)
-- `meltwater_collect.js` - Meltwater API collector for searchid 27861003 (runs every 4 hours)
+- `collect.js` - Main RSS collection cron job (runs every hour via vercel.json)
+- `congress_collect.js` - Federal legislation collector (runs every hour)
+- `tracked_bills_collect.js` - Tracked bills collector for specific Congress bills (runs every hour)
+- `newsletter_rss_collect.js` - Newsletter RSS collector with China/Chinese filtering (runs every hour)
+- `meltwater_collect.js` - Meltwater API collector for searchid 27861003 (runs once daily at 8 AM EST)
 - `meltwater_webhook.js` - Receives real-time Meltwater alerts (webhook)
 - `ga_webhook.js` - Receives Google Alerts via webhook
 - `summary.js` - API endpoint that returns dashboard data
@@ -87,9 +88,10 @@ vercel dev
 ## Deployment
 
 Deployed on Vercel with:
-- Automatic cron job execution (`/api/collect` every 5 minutes)
+- Automatic cron job execution (most endpoints run every hour, Meltwater once daily)
 - Environment variables set in Vercel dashboard
 - Redis storage via Upstash integration
+- 14-day data retention in Redis
 
 ## Data Flow
 

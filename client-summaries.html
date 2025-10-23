@@ -55,7 +55,10 @@
   <div class="wrap">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px">
       <h2 class="section-title" style="margin:0">Saved Client Summaries</h2>
-      <button id="export-doc-btn" class="back-btn" style="background:#4a6741" onclick="exportToWord()">📄 Export to Word</button>
+      <div style="display:flex;gap:8px">
+        <button id="export-doc-btn" class="back-btn" style="background:#4a6741" onclick="exportToWord()">Export to Word</button>
+        <button id="clear-summaries-btn" class="back-btn" style="background:#d32f2f" onclick="clearAllSummaries()">Clear All Summaries</button>
+      </div>
     </div>
     <div id="loading" class="loading">Loading summaries...</div>
     <div id="summaries-container"></div>
@@ -208,6 +211,34 @@
       }).catch(err => {
         alert('Failed to copy: ' + err.message);
       });
+    }
+
+    // Clear all client summaries
+    async function clearAllSummaries() {
+      if (!confirm('Are you sure you want to clear ALL client summaries? This cannot be undone.')) {
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/clear_client_summaries', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        const data = await res.json();
+
+        if (data.ok) {
+          alert('All client summaries have been cleared.');
+          loadSummaries(); // Reload to show empty state
+        } else {
+          throw new Error(data.error || 'Failed to clear summaries');
+        }
+      } catch (error) {
+        console.error('Error clearing client summaries:', error);
+        alert(`Error: ${error.message}`);
+      }
     }
 
     async function exportToWord() {

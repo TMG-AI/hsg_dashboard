@@ -498,7 +498,7 @@
                 <h3 class="card-title" style="flex:1;margin:0;color:${titleColor}"><${titleTag} ${titleHref} style="color:${titleColor};${isNewsletterSummary ? 'cursor:default;' : ''}"></${titleTag}></h3>
               </div>
               <div class="meta">
-                <div>${article.source || article.provider || 'Newsletter'} · ${formatDate(article.published)}${isNewsletterSummary ? ' · <span style="color:#FF6B35;font-weight:600;">Newsletter Summary</span>' : ''}</div>
+                <div>${article.source || article.provider || 'Newsletter'} · ${formatDate(article.published)}</div>
               </div>
               ${summary}
             </div>`;

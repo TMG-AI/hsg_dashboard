@@ -108,10 +108,13 @@ export default async function handler(req, res) {
             }
           }
 
+          // Clean title: remove emojis and whitespace
+          const cleanTitle = title.replace(/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/gu, '').trim();
+
           // Build article object
           const m = {
             id: articleId,
-            title: `${newsletterName}: ${title}`,
+            title: cleanTitle, // Just the title, without source name prefix
             link: link && link.startsWith('http') ? link : null, // Only include valid URLs
             source: newsletterName,
             provider: newsletterName,

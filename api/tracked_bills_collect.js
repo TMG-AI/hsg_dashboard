@@ -17,22 +17,62 @@ const RETENTION_DAYS = 14;
 // Initialize Resend for email alerts (optional)
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
-// TRACKED BILLS LIST - Add bill numbers here in format: "hr1234", "s5678", etc.
+// TRACKED BILLS LIST - Bills from user's China policy tracking list
 const TRACKED_BILLS = [
-  // House Bills
-  "hr82", "hr139", "hr515", "hr1157", "hr1398", "hr1836", "hr2000", "hr2864",
-  "hr3334", "hr4004", "hr4173", "hr4219", "hr4227", "hr5515", "hr6323",
-  "hr7176", "hr7217", "hr7249", "hr7624", "hr7909", "hr8233", "hr8270",
-  "hr8360", "hr8446", "hr8790", "hr8800", "hr8867", "hr9456",
+  // Senate Bills (26 total)
+  "s2047",  // No Capital Gains Allowance for American Adversaries Act
+  "s2048",  // PRC Military and Human Rights Capital Markets Sanctions Act
+  "s2046",  // No China in Index Funds Act
+  "s2045",  // Protecting Endowments from Our Adversaries Act
+  "s1748",  // Kids Online Safety Act
+  "s836",   // Children and Teens' Online Privacy Protection Act
+  "s1296",  // DETERRENT Act
+  "s1185",  // FIGHTING for America Act
+  "s1053",  // FIGHT China Act
+  "s278",   // Kids Off Social Media Act (KOSMA)
+  "s1356",  // TICKER Act
+  "s1360",  // Protecting American Capital Act of 2025
+  "s1357",  // SAFE Act
+  "s1358",  // TASK Act
+  "s1359",  // STOP CCP Act
+  "s244",   // ROUTERS Act
+  "s97",    // Securing Semiconductor Supply Chains Act
+  "s257",   // Promoting Resilient Supply Chains Act of 2025
+  "s817",   // Falun Gong Protection Act
+  "s2224",  // Taiwan International Solidarity Act
+  "s1705",  // Chip Security Act
+  "s1711",  // STOP China Act
+  "s1625",  // SHIELD Against CCP Act
+  "s1934",  // Securing Our Energy Supply Chains Act
+  "s2268",  // Agricultural Risk Review Act of 2025
+  "s744",   // Maintaining American Superiority by Improving Export Control Transparency Act
 
-  // Senate Bills
-  "s257", "s426", "s1130", "s1631", "s1687", "s1890", "s2074", "s2228",
-  "s2292", "s2426", "s3283", "s3312", "s3589", "s3654", "s4031", "s4089",
-  "s4111", "s4159", "s4239", "s4532", "s4591", "s4909", "s5015", "s5384",
-  "s5385", "s5524",
-
-  // Resolutions
-  "hres109", "hres1398", "sres906"
+  // House Bills (24 total)
+  "hr1549", // China Financial Threat Mitigation Act of 2025
+  "hr2914", // NO LIMITS Act
+  "hr2683", // Remote Access Security Act
+  "hr1048", // DETERRENT Act
+  "hr2246", // FIGHT China Act
+  "hr906",  // Foreign Adversary Communications Transparency Act
+  "hr866",  // ROUTERS Act
+  "hr2480", // Securing Semiconductor Supply Chains Act
+  "hr2444", // Promoting Resilient Supply Chains Act of 2025
+  "hr1540", // Falun Gong Protection Act
+  "hr1724", // The No Dollars to Uyghur Forced Labor Act
+  "hr1503", // Stop Forced Organ Harvesting Act of 2025
+  "hr2416", // Taiwan International Solidarity Act
+  "hr3447", // Chip Security Act
+  "hr4361", // STOP China Act
+  "hr708",  // SHIELD Against CCP Act
+  "hr2390", // Maritime Supply Chain Security Act
+  "hr252",  // Secure Our Ports act of 2025
+  "hr2035", // American Cargo for American Ships Act
+  "hr1713", // Agricultural Risk Review Act of 2025
+  "hr4505", // Export Controls Enforcement Act
+  "hr1316", // Maintaining American Superiority by Improving Export Control Transparency Act
+  "hr4978", // Secure Trade Act
+  "hr747",  // Stop Chinese Fentanyl Act
+  "hr5022"  // No Advanced Chips for the CCP Act of 2025
 ];
 
 // Helper functions

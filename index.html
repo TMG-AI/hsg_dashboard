@@ -504,12 +504,13 @@
             </div>`;
 
           // Safely set title and summary using textContent to decode HTML entities and strip tags
-          const titleLink = div.querySelector('.card-title a');
-          if (titleLink) {
+          // Handle both <a> tags (normal articles) and <span> tags (newsletter summaries)
+          const titleElement = div.querySelector('.card-title a') || div.querySelector('.card-title span');
+          if (titleElement) {
             // Use DOMParser to strip HTML tags and decode entities
             const parser = new DOMParser();
             const doc = parser.parseFromString(article.title, 'text/html');
-            titleLink.textContent = doc.body.textContent || article.title;
+            titleElement.textContent = doc.body.textContent || article.title;
           }
 
           if (summaryText) {

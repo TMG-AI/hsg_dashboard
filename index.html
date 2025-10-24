@@ -573,6 +573,10 @@
             if (currentFilter === 'newsletter') {
               return origin === 'newsletter' || origin === 'newsletter_rss';
             }
+            // Handle both "congress" and "congress_tracked" when filtering by congress
+            if (currentFilter === 'congress') {
+              return origin === 'congress' || origin === 'congress_tracked';
+            }
             return origin === currentFilter;
           });
         }

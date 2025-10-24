@@ -7,7 +7,7 @@ const redis = new Redis({
 });
 
 const ZSET = "mentions:z";
-const TOPICS_CACHE = "topics:cache";
+const TOPICS_CACHE = "topics:categorized:cache";
 const CACHE_TTL = 3600; // 1 hour cache
 
 function toObj(x) {
@@ -46,7 +46,7 @@ export default async function handler(req, res) {
     const raw = await redis.zrange(ZSET, startTime, now, { byScore: true });
     const articles = raw.map(toObj).filter(Boolean);
 
-    console.log(`Topic clustering: Analyzing ${articles.length} articles from last ${days} days`);
+    console.log(`Topic categorization: Analyzing ${articles.length} articles from last ${days} days`);
 
     if (articles.length === 0) {
       return res.status(200).json({
@@ -83,37 +83,42 @@ export default async function handler(req, res) {
         messages: [
           {
             role: 'system',
-            content: `You are an expert at analyzing news articles about China and identifying major topics/themes.
+            content: `You are a deterministic policy intelligence classifier for TMG's HSG Dashboard.
 
-Given a list of article titles, identify 5-10 major topic clusters that group similar articles together.
-
-For each topic:
-1. Create a clear, descriptive topic name (e.g., "Trade Wars & Tariffs", "Technology & Semiconductors")
-2. List the article indices (idx values) that belong to this topic
-3. Write a 2-3 sentence summary of what this topic cluster is about
+Categorize articles into these 10 policy categories:
+1. Trade & Investment - tariffs, de minimis, outbound investment, CFIUS
+2. Technology & AI - AI export/compute controls, GAIN AI Act, Nvidia/Anthropic policies
+3. Security & Sanctions - Entity List, OFAC/SDN, DoD designations, SAFE Research-like
+4. Financial Markets & Capital Controls - delisting/index bans, SEC/Treasury disclosures (TICKER/SAFE/Protecting American Capital)
+5. Education & Research Oversight - foreign gifts/contracts in higher ed, SAFE Research/DETERRENT, visas
+6. Infrastructure & Property - ports/cranes/maritime, farmland/leases, state restrictions
+7. Health & Biotech - BIOSECURE, clinical/genomic data, experimental treatments EO
+8. Social Media & Content Regulation - TikTok/ByteDance, KOSA, COPPA 2.0, TAKE IT DOWN, KOSMA
+9. Human Rights & Ethics - Uyghur forced labor, organ harvesting, Falun Gong
+10. Legislative Monitoring & Political Messaging - committee statements, hearings, legislative calendar, high-level rhetoric
 
 Return ONLY valid JSON in this exact format:
 {
   "topics": [
     {
-      "name": "Topic Name",
-      "article_indices": [0, 5, 12, 23],
-      "summary": "Brief summary of this topic cluster and why these articles are grouped together.",
-      "article_count": 4
+      "name": "Trade & Investment",
+      "article_indices": [0, 5, 12],
+      "summary": "Articles covering tariffs, de minimis rules, outbound investment screening, and CFIUS reviews.",
+      "article_count": 3
     }
   ]
 }
 
 Guidelines:
-- Create 5-10 topics maximum (don't create too many small clusters)
-- Each article should belong to exactly ONE topic (no duplicates)
-- If articles don't fit any major topic, create an "Other/Miscellaneous" topic
-- Topic names should be clear and specific
-- Order topics by article count (largest clusters first)`
+- Use EXACTLY the 10 category names listed above
+- Each article belongs to exactly ONE category (no duplicates)
+- If an article doesn't clearly fit any category, assign to the closest match
+- Order topics by article count (largest first)
+- Summaries should be 1-2 sentences describing what's covered in this category`
           },
           {
             role: 'user',
-            content: `Analyze these ${articles.length} articles and cluster them into topics:\n\n${JSON.stringify(articleData, null, 2)}`
+            content: `Categorize these ${articles.length} articles into the 10 policy categories:\n\n${JSON.stringify(articleData, null, 2)}`
           }
         ],
         temperature: 0.3,
@@ -208,7 +213,7 @@ Guidelines:
     res.status(200).json(result);
 
   } catch (e) {
-    console.error('Topic clustering error:', e);
+    console.error('Topic categorization error:', e);
     res.status(500).json({
       ok: false,
       error: e?.message || String(e)

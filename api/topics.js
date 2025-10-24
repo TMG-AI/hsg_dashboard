@@ -91,12 +91,27 @@ Categorize articles by their SUBSTANTIVE POLICY CONTENT into these 10 categories
 9. Human Rights & Ethics - Uyghur forced labor, organ harvesting, Falun Gong, religious persecution, detention camps, human rights violations
 10. Legislative Monitoring & Political Messaging - ONLY for articles about the LEGISLATIVE PROCESS itself (committee hearings, markup sessions, floor votes, legislative calendars) or HIGH-LEVEL diplomatic statements with no specific policy content
 
-IMPORTANT: Bills and legislation should be categorized by what they DO, not that they are legislation:
-- "BIOSECURE Act passes committee" → Health & Biotech (it's about biotech restrictions)
-- "KOSA advances in Senate" → Social Media & Content Regulation (it's about kids online safety)
-- "Tariff bill introduced" → Trade & Investment (it's about tariffs)
-- "Generic committee hearing on China" → Legislative Monitoring (procedural, no specific policy)
-- "Senator speaks about China threat" without specific policy → Legislative Monitoring
+IMPORTANT CATEGORIZATION RULES:
+
+1. Bills/legislation categorized by SUBSTANCE (what they DO), not process:
+   - "BIOSECURE Act passes committee" → Health & Biotech (it's about biotech restrictions)
+   - "KOSA advances in Senate" → Social Media & Content Regulation (it's about kids online safety)
+   - "Tariff bill introduced" → Trade & Investment (it's about tariffs)
+
+2. Legislative Monitoring is ONLY for pure process/procedural articles:
+   - "Generic committee hearing on China" → Legislative Monitoring
+   - "Senator speaks about China threat" (vague, no specific policy) → Legislative Monitoring
+   - "Congressional calendar updated" → Legislative Monitoring
+
+3. Generic business/economic news defaults to Trade & Investment:
+   - "Apple sells out in China" → Trade & Investment (business activity)
+   - "US-China economic tensions" → Trade & Investment (unless specifically about tech, finance, etc.)
+   - Ambiguous tariff/trade articles → Trade & Investment
+
+4. Human Rights & Ethics is ONLY for actual human rights violations:
+   - Must involve: forced labor, organ harvesting, religious persecution, detention camps, Falun Gong, Uyghurs
+   - Generic China criticism or political rhetoric → Legislative Monitoring
+   - Economic/business news → Trade & Investment
 
 Return ONLY valid JSON in this exact format:
 {

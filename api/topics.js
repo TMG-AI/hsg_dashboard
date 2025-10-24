@@ -35,8 +35,11 @@ export default async function handler(req, res) {
       }
     }
 
-    if (!process.env.OPENAI_API_KEY) {
-      return res.status(500).json({ error: "OpenAI API key not configured" });
+    // Support both Anthropic and OpenAI
+    const useAnthropic = process.env.ANTHROPIC_API_KEY ? true : false;
+
+    if (!useAnthropic && !process.env.OPENAI_API_KEY) {
+      return res.status(500).json({ error: "Neither Anthropic nor OpenAI API key configured" });
     }
 
     // Get articles from specified time range
@@ -69,105 +72,171 @@ export default async function handler(req, res) {
       published: a.published
     }));
 
-    console.log(`Analyzing ${articleData.length} articles (limited from ${articles.length} total)`);
+    console.log(`Analyzing ${articleData.length} articles (limited from ${articles.length} total) using ${useAnthropic ? 'Anthropic' : 'OpenAI'}`);
 
-    // Ask OpenAI to cluster articles into topics
-    const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [
-          {
-            role: 'system',
-            content: `You are a deterministic policy intelligence classifier for TMG's HSG Dashboard.
+    const systemPrompt = `You are a deterministic policy intelligence classifier for TMG's HSG Dashboard.
+
+CRITICAL: You MUST categorize EVERY SINGLE article provided. Do not skip any articles.
 
 Categorize articles into these 10 policy categories:
-1. Trade & Investment - tariffs, de minimis, outbound investment, CFIUS
-2. Technology & AI - AI export/compute controls, GAIN AI Act, Nvidia/Anthropic policies
-3. Security & Sanctions - Entity List, OFAC/SDN, DoD designations, SAFE Research-like
-4. Financial Markets & Capital Controls - delisting/index bans, SEC/Treasury disclosures (TICKER/SAFE/Protecting American Capital)
-5. Education & Research Oversight - foreign gifts/contracts in higher ed, SAFE Research/DETERRENT, visas
-6. Infrastructure & Property - ports/cranes/maritime, farmland/leases, state restrictions
-7. Health & Biotech - BIOSECURE, clinical/genomic data, experimental treatments EO
-8. Social Media & Content Regulation - TikTok/ByteDance, KOSA, COPPA 2.0, TAKE IT DOWN, KOSMA
-9. Human Rights & Ethics - Uyghur forced labor, organ harvesting, Falun Gong
-10. Legislative Monitoring & Political Messaging - committee statements, hearings, legislative calendar, high-level rhetoric
+1. Trade & Investment - tariffs, de minimis, outbound investment, CFIUS, trade policy, export restrictions, import controls
+2. Technology & AI - AI export/compute controls, GAIN AI Act, semiconductors, chips, technology transfer, Nvidia/AMD policies, quantum computing
+3. Security & Sanctions - Entity List, OFAC/SDN, DoD designations, SAFE Research, military-civil fusion, espionage, cybersecurity threats
+4. Financial Markets & Capital Controls - delisting/index bans, SEC/Treasury disclosures, TICKER/SAFE/Protecting American Capital, investment restrictions, capital markets
+5. Education & Research Oversight - foreign gifts/contracts in higher ed, SAFE Research/DETERRENT, visas, student restrictions, academic espionage, Confucius Institutes
+6. Infrastructure & Property - ports/cranes/maritime, farmland/leases, real estate, state restrictions, critical infrastructure, supply chains
+7. Health & Biotech - BIOSECURE, clinical/genomic data, experimental treatments EO, pharmaceuticals, biotech restrictions, medical supply chains
+8. Social Media & Content Regulation - TikTok/ByteDance, KOSA, COPPA 2.0, TAKE IT DOWN, KOSMA, social media bans, content moderation, data privacy
+9. Human Rights & Ethics - Uyghur forced labor, organ harvesting, Falun Gong, religious persecution, detention camps, human rights violations
+10. Legislative Monitoring & Political Messaging - committee statements, hearings, legislative calendar, high-level rhetoric, Congressional activity, political announcements
 
 Return ONLY valid JSON in this exact format:
 {
   "topics": [
     {
       "name": "Trade & Investment",
-      "article_indices": [0, 5, 12],
+      "article_indices": [0, 5, 12, 23, 45],
       "summary": "Articles covering tariffs, de minimis rules, outbound investment screening, and CFIUS reviews.",
-      "article_count": 3
+      "article_count": 5
     }
   ]
 }
 
-Guidelines:
+MANDATORY REQUIREMENTS:
 - Use EXACTLY the 10 category names listed above
-- Each article belongs to exactly ONE category (no duplicates)
-- If an article doesn't clearly fit any category, assign to the closest match
+- EVERY article index from 0 to ${articleData.length - 1} MUST appear in exactly ONE category
+- Do not leave any articles uncategorized
+- If an article is ambiguous, use your best judgment to assign it to the most relevant category
 - Order topics by article count (largest first)
-- Summaries should be 1-2 sentences describing what's covered in this category`
-          },
-          {
-            role: 'user',
-            content: `Categorize these ${articles.length} articles into the 10 policy categories:\n\n${JSON.stringify(articleData, null, 2)}`
-          }
-        ],
-        temperature: 0.3,
-        max_tokens: 4000,
-        response_format: { type: "json_object" }
-      })
-    });
+- Summaries should be 1-2 sentences`;
+
+    const userPrompt = `Categorize ALL ${articleData.length} articles below into the 10 policy categories. Every single article must be assigned to one category.
+
+Articles to categorize:
+${JSON.stringify(articleData, null, 2)}`;
+
+    let aiResponse;
+
+    if (useAnthropic) {
+      // Use Anthropic Claude
+      aiResponse = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': process.env.ANTHROPIC_API_KEY,
+          'anthropic-version': '2023-06-01'
+        },
+        body: JSON.stringify({
+          model: 'claude-3-5-sonnet-20241022',
+          max_tokens: 8000,
+          temperature: 0,
+          messages: [
+            {
+              role: 'user',
+              content: `${systemPrompt}\n\n${userPrompt}`
+            }
+          ]
+        })
+      });
+    } else {
+      // Use OpenAI
+      aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: [
+            {
+              role: 'system',
+              content: systemPrompt
+            },
+            {
+              role: 'user',
+              content: userPrompt
+            }
+          ],
+          temperature: 0,
+          max_tokens: 8000,
+          response_format: { type: "json_object" }
+        })
+      });
+    }
+
+    const openaiResponse = aiResponse;
 
     if (!openaiResponse.ok) {
       const error = await openaiResponse.text();
-      console.error('OpenAI API error:', openaiResponse.status, error);
+      console.error('AI API error:', openaiResponse.status, error);
       return res.status(500).json({
-        error: `OpenAI API error: ${openaiResponse.status}`,
+        error: `AI API error: ${openaiResponse.status}`,
         details: error
       });
     }
 
     const data = await openaiResponse.json();
 
-    // Better error handling for OpenAI response
-    if (!data.choices || !data.choices[0] || !data.choices[0].message || !data.choices[0].message.content) {
-      console.error('Invalid OpenAI response structure:', JSON.stringify(data));
-      return res.status(500).json({
-        error: 'OpenAI returned invalid response structure',
-        details: 'No content in response'
-      });
+    // Parse response based on which API we used
+    let contentStr;
+
+    if (useAnthropic) {
+      // Anthropic response format
+      if (!data.content || !data.content[0] || !data.content[0].text) {
+        console.error('Invalid Anthropic response structure:', JSON.stringify(data));
+        return res.status(500).json({
+          error: 'Anthropic returned invalid response structure',
+          details: 'No content in response'
+        });
+      }
+      contentStr = data.content[0].text.trim();
+    } else {
+      // OpenAI response format
+      if (!data.choices || !data.choices[0] || !data.choices[0].message || !data.choices[0].message.content) {
+        console.error('Invalid OpenAI response structure:', JSON.stringify(data));
+        return res.status(500).json({
+          error: 'OpenAI returned invalid response structure',
+          details: 'No content in response'
+        });
+      }
+      contentStr = data.choices[0].message.content.trim();
     }
 
-    const contentStr = data.choices[0].message.content.trim();
     if (!contentStr) {
       return res.status(500).json({
-        error: 'OpenAI returned empty content'
+        error: 'AI returned empty content'
       });
     }
 
     let clusteringResult;
     try {
-      clusteringResult = JSON.parse(contentStr);
+      // Extract JSON from markdown code blocks if present (Claude sometimes does this)
+      let jsonStr = contentStr;
+      if (contentStr.includes('```json')) {
+        const match = contentStr.match(/```json\s*([\s\S]*?)\s*```/);
+        if (match) {
+          jsonStr = match[1];
+        }
+      } else if (contentStr.includes('```')) {
+        const match = contentStr.match(/```\s*([\s\S]*?)\s*```/);
+        if (match) {
+          jsonStr = match[1];
+        }
+      }
+
+      clusteringResult = JSON.parse(jsonStr);
     } catch (parseError) {
-      console.error('Failed to parse OpenAI response:', contentStr.substring(0, 500));
+      console.error('Failed to parse AI response:', contentStr.substring(0, 500));
       return res.status(500).json({
-        error: 'Failed to parse OpenAI JSON response',
+        error: 'Failed to parse AI JSON response',
         details: parseError.message
       });
     }
 
     if (!clusteringResult.topics || !Array.isArray(clusteringResult.topics)) {
       return res.status(500).json({
-        error: 'OpenAI response missing topics array'
+        error: 'AI response missing topics array'
       });
     }
 

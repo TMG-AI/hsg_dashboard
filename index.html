@@ -402,20 +402,6 @@
 
     <div id="err"></div>
 
-    <!-- Tracked Bills Section -->
-    <div id="tracked-bills-section" style="margin-bottom:32px;display:none">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-        <h2 class="section-title" style="margin:0">Tracked Bills</h2>
-        <div style="display:flex;gap:8px;align-items:center">
-          <span id="tracked-bills-count" style="background:linear-gradient(135deg,#4a6741,#5a7c50);color:#fff;padding:6px 14px;border-radius:20px;font-size:14px;font-weight:600">0</span>
-          <button onclick="refreshTrackedBills()" class="action-btn" style="padding:8px 16px;font-size:13px">
-            <span id="refresh-tracked-btn-text">Refresh</span>
-          </button>
-        </div>
-      </div>
-      <div id="tracked-bills-list" class="articles-container"></div>
-    </div>
-
     <h2 class="section-title">Recent Mentions</h2>
     <div id="loading" class="loading" style="display:none">Loading mentions...</div>
     <div id="list" class="articles-container"></div>
@@ -578,9 +564,6 @@
         // Store all mentions for filtering
         allMentions = Array.isArray(data) ? data : [];
 
-        // Filter out tracked bills (they are shown in separate section)
-        allMentions = allMentions.filter(m => (m.origin || '') !== 'congress_tracked');
-
         // Apply current filter
         let filtered = allMentions;
         if (currentFilter !== 'all') {
@@ -614,10 +597,10 @@
         // Apply search filter
         if (search) filtered = filtered.filter(m => (m.title||"").toLowerCase().includes(search));
 
-        // Sort: Congress first, then by date (newest first)
+        // Sort: Congress first (including tracked bills), then by date (newest first)
         filtered.sort((a, b) => {
-          const aIsCongress = (a.origin || '').toLowerCase() === 'congress';
-          const bIsCongress = (b.origin || '').toLowerCase() === 'congress';
+          const aIsCongress = (a.origin || '').toLowerCase() === 'congress' || (a.origin || '').toLowerCase() === 'congress_tracked';
+          const bIsCongress = (b.origin || '').toLowerCase() === 'congress' || (b.origin || '').toLowerCase() === 'congress_tracked';
 
           if (aIsCongress && !bIsCongress) return -1;  // a (Congress) comes first
           if (!aIsCongress && bIsCongress) return 1;   // b (Congress) comes first
@@ -650,102 +633,6 @@
         const el=document.getElementById('err'); el.style.display='block';
         el.textContent='Could not load mentions. '+e.message;
         console.error('Error loading mentions:', e);
-      }
-    }
-
-    // Load and display tracked bills
-    async function loadTrackedBills() {
-      try {
-        const res = await fetch('/api/get_mentions?origin=congress_tracked&limit=10000', { cache: 'no-store' });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-
-        const trackedBills = Array.isArray(data) ? data : [];
-
-        // Filter for only tracked bills from past 7 days
-        const sevenDaysAgo = new Date();
-        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-        const filtered = trackedBills.filter(m =>
-          (m.origin === 'congress_tracked' || m.is_tracked === true) &&
-          new Date(m.published) >= sevenDaysAgo
-        );
-
-        // Sort by date (newest first)
-        filtered.sort((a, b) => new Date(b.published) - new Date(a.published));
-
-        // Update count
-        const countEl = document.getElementById('tracked-bills-count');
-        if (countEl) countEl.textContent = filtered.length;
-
-        // Show/hide section based on whether there are bills
-        const sectionEl = document.getElementById('tracked-bills-section');
-        if (filtered.length > 0) {
-          sectionEl.style.display = 'block';
-        } else {
-          sectionEl.style.display = 'none';
-          return;
-        }
-
-        // Render bills
-        const listEl = document.getElementById('tracked-bills-list');
-        listEl.innerHTML = '';
-
-        if (filtered.length === 0) {
-          listEl.innerHTML = `
-            <div class="empty-state">
-              <div class="empty-state-icon">📋</div>
-              <h3>No bill updates in the past 7 days</h3>
-              <p>Tracked bills will appear here when they are updated.</p>
-            </div>`;
-          return;
-        }
-
-        for (let i = 0; i < filtered.length; i++) {
-          await addArticleCard(listEl, filtered[i], i * 0.05);
-        }
-      } catch (e) {
-        console.error('Error loading tracked bills:', e);
-        const sectionEl = document.getElementById('tracked-bills-section');
-        sectionEl.style.display = 'none';
-      }
-    }
-
-    // Refresh tracked bills by calling the collection endpoint
-    async function refreshTrackedBills() {
-      const btn = document.getElementById('refresh-tracked-btn-text');
-      const originalText = btn.textContent;
-
-      try {
-        btn.textContent = 'Refreshing...';
-
-        const res = await fetch('/api/tracked_bills_collect', {
-          method: 'GET',
-          cache: 'no-store'
-        });
-
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-
-        btn.textContent = '✓ Updated!';
-
-        // Reload tracked bills display
-        await loadTrackedBills();
-
-        // Also reload main mentions in case any bills moved
-        await loadMentions();
-
-        setTimeout(() => {
-          btn.textContent = originalText;
-        }, 2000);
-
-      } catch (e) {
-        btn.textContent = 'Error';
-        console.error('Error refreshing tracked bills:', e);
-        alert(`Failed to refresh tracked bills: ${e.message}`);
-
-        setTimeout(() => {
-          btn.textContent = originalText;
-        }, 2000);
       }
     }
 
@@ -843,7 +730,6 @@
       btn.disabled = true; btn.classList.add('loading'); btnText.textContent = 'Loading...';
       try {
         await loadMentions();
-        await loadTrackedBills();
         btnText.textContent = 'Updated!';
         setTimeout(() => { btnText.textContent = 'Get Latest News'; }, 2000);
       } catch (error) {
@@ -1450,7 +1336,6 @@ ${articleText}`;
     // Initialize
     loadFlaggedArticles().then(() => {
       loadMentions();
-      loadTrackedBills();
     });
   </script>
 

@@ -78,17 +78,25 @@ export default async function handler(req, res) {
 
 CRITICAL: You MUST categorize EVERY SINGLE article provided. Do not skip any articles.
 
-Categorize articles into these 10 policy categories:
-1. Trade & Investment - tariffs, de minimis, outbound investment, CFIUS, trade policy, export restrictions, import controls
-2. Technology & AI - AI export/compute controls, GAIN AI Act, semiconductors, chips, technology transfer, Nvidia/AMD policies, quantum computing
-3. Security & Sanctions - Entity List, OFAC/SDN, DoD designations, SAFE Research, military-civil fusion, espionage, cybersecurity threats
+Categorize articles by their SUBSTANTIVE POLICY CONTENT into these 10 categories:
+
+1. Trade & Investment - tariffs, de minimis, outbound investment, CFIUS, trade deals, export restrictions, import controls, trade negotiations, business deals
+2. Technology & AI - AI export/compute controls, GAIN AI Act, semiconductors, chips, technology transfer, Nvidia/AMD policies, quantum computing, software restrictions
+3. Security & Sanctions - Entity List, OFAC/SDN, DoD designations, SAFE Research, military-civil fusion, espionage, cybersecurity threats, national security
 4. Financial Markets & Capital Controls - delisting/index bans, SEC/Treasury disclosures, TICKER/SAFE/Protecting American Capital, investment restrictions, capital markets
 5. Education & Research Oversight - foreign gifts/contracts in higher ed, SAFE Research/DETERRENT, visas, student restrictions, academic espionage, Confucius Institutes
 6. Infrastructure & Property - ports/cranes/maritime, farmland/leases, real estate, state restrictions, critical infrastructure, supply chains
 7. Health & Biotech - BIOSECURE, clinical/genomic data, experimental treatments EO, pharmaceuticals, biotech restrictions, medical supply chains
 8. Social Media & Content Regulation - TikTok/ByteDance, KOSA, COPPA 2.0, TAKE IT DOWN, KOSMA, social media bans, content moderation, data privacy
 9. Human Rights & Ethics - Uyghur forced labor, organ harvesting, Falun Gong, religious persecution, detention camps, human rights violations
-10. Legislative Monitoring & Political Messaging - committee statements, hearings, legislative calendar, high-level rhetoric, Congressional activity, political announcements
+10. Legislative Monitoring & Political Messaging - ONLY for articles about the LEGISLATIVE PROCESS itself (committee hearings, markup sessions, floor votes, legislative calendars) or HIGH-LEVEL diplomatic statements with no specific policy content
+
+IMPORTANT: Bills and legislation should be categorized by what they DO, not that they are legislation:
+- "BIOSECURE Act passes committee" → Health & Biotech (it's about biotech restrictions)
+- "KOSA advances in Senate" → Social Media & Content Regulation (it's about kids online safety)
+- "Tariff bill introduced" → Trade & Investment (it's about tariffs)
+- "Generic committee hearing on China" → Legislative Monitoring (procedural, no specific policy)
+- "Senator speaks about China threat" without specific policy → Legislative Monitoring
 
 Return ONLY valid JSON in this exact format:
 {

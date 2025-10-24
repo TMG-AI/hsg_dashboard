@@ -105,15 +105,30 @@ Return ONLY valid JSON in this exact format:
 MANDATORY REQUIREMENTS:
 - Use EXACTLY the 10 category names listed above
 - EVERY article index from 0 to ${articleData.length - 1} MUST appear in exactly ONE category
-- Do not leave any articles uncategorized
+- Do not leave any articles uncategorized - if unsure, pick the closest match
 - If an article is ambiguous, use your best judgment to assign it to the most relevant category
 - Order topics by article count (largest first)
-- Summaries should be 1-2 sentences`;
+- Summaries should be 1-2 sentences
 
-    const userPrompt = `Categorize ALL ${articleData.length} articles below into the 10 policy categories. Every single article must be assigned to one category.
+EXAMPLES OF CATEGORIZATION:
+- "US May Cut Tariff on India" → Trade & Investment
+- "Trump Administration weighs restricting US software exports" → Technology & AI
+- "BIOSECURE Act passes committee" → Health & Biotech
+- "TikTok ban bill advances" → Social Media & Content Regulation
+- "Chinese minister to visit Brussels amid rare-earth row" → Trade & Investment
+- "Congressional hearing on China policy" → Legislative Monitoring & Political Messaging
+- "Uyghur forced labor prevention act" → Human Rights & Ethics
+- "CFIUS blocks Chinese investment" → Trade & Investment
+- "Entity List additions announced" → Security & Sanctions
+
+Even generic China news articles, YouTube videos, or brief mentions should be categorized based on their primary subject matter.`;
+
+    const userPrompt = `Categorize ALL ${articleData.length} articles below into the 10 policy categories. Every single article from index 0 to ${articleData.length - 1} must be assigned to exactly one category.
 
 Articles to categorize:
-${JSON.stringify(articleData, null, 2)}`;
+${JSON.stringify(articleData, null, 2)}
+
+REMINDER: Your response must include ALL ${articleData.length} article indices distributed across the 10 categories. Do not skip any articles.`;
 
     let aiResponse;
 

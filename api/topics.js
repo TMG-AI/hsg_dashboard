@@ -171,7 +171,7 @@ REMINDER: Your response must include ALL ${articleData.length} article indices d
           messages: [
             {
               role: 'user',
-              content: `${systemPrompt}\n\n${userPrompt}`
+              content: `${systemPrompt}\n\n${userPrompt}\n\nIMPORTANT: Respond ONLY with valid JSON. Do not include any explanatory text, markdown formatting, or code blocks. Start your response with { and end with }.`
             }
           ]
         })

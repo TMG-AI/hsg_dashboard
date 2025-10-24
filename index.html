@@ -1198,6 +1198,11 @@ ${articleText}`;
           flaggedArticles.clear();
           updateFlaggedCount();
 
+          // Uncheck all checkboxes on the page
+          document.querySelectorAll('.flag-checkbox:checked').forEach(checkbox => {
+            checkbox.checked = false;
+          });
+
           alert('All flagged articles have been cleared.');
 
           // Reload articles if currently viewing flagged

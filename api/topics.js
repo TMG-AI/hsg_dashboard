@@ -78,7 +78,7 @@ export default async function handler(req, res) {
 
 CRITICAL: You MUST categorize EVERY SINGLE article provided. Do not skip any articles.
 
-Categorize articles by their SUBSTANTIVE POLICY CONTENT into these 10 categories:
+Categorize articles by their SUBSTANTIVE POLICY CONTENT into these 11 categories:
 
 1. Trade & Investment - tariffs, de minimis, outbound investment, CFIUS, trade deals, export restrictions, import controls, trade negotiations, business deals
 2. Technology & AI - AI export/compute controls, GAIN AI Act, semiconductors, chips, technology transfer, Nvidia/AMD policies, quantum computing, software restrictions
@@ -90,6 +90,7 @@ Categorize articles by their SUBSTANTIVE POLICY CONTENT into these 10 categories
 8. Social Media & Content Regulation - TikTok/ByteDance, KOSA, COPPA 2.0, TAKE IT DOWN, KOSMA, social media bans, content moderation, data privacy
 9. Human Rights & Ethics - Uyghur forced labor, organ harvesting, Falun Gong, religious persecution, detention camps, human rights violations
 10. Legislative Monitoring & Political Messaging - ONLY for articles about the LEGISLATIVE PROCESS itself (committee hearings, markup sessions, floor votes, legislative calendars) or HIGH-LEVEL diplomatic statements with no specific policy content
+11. General China News - For general news, opinion pieces, YouTube videos, or articles that don't fit clearly into any specific policy category above
 
 IMPORTANT CATEGORIZATION RULES:
 
@@ -126,11 +127,11 @@ Return ONLY valid JSON in this exact format:
 }
 
 MANDATORY REQUIREMENTS:
-- Use EXACTLY the 10 category names listed above
+- Use EXACTLY the 11 category names listed above
 - EVERY article index from 0 to ${articleData.length - 1} MUST appear in exactly ONE category
-- Do not leave any articles uncategorized - if unsure, pick the closest match
-- If an article is ambiguous, use your best judgment to assign it to the most relevant category
-- Order topics by article count (largest first)
+- Do not leave any articles uncategorized - if unsure, assign to General China News
+- If an article doesn't clearly fit a specific policy category, use General China News
+- Order topics by article count (largest first), but General China News must always be last regardless of count
 - Summaries should be 1-2 sentences
 
 EXAMPLES OF CATEGORIZATION:
@@ -302,8 +303,12 @@ REMINDER: Your response must include ALL ${articleData.length} article indices d
       };
     });
 
-    // Sort topics by article count (largest first)
-    topics.sort((a, b) => b.article_count - a.article_count);
+    // Sort topics: General China News always last, others by article count (largest first)
+    topics.sort((a, b) => {
+      if (a.name === "General China News") return 1;
+      if (b.name === "General China News") return -1;
+      return b.article_count - a.article_count;
+    });
 
     const result = {
       ok: true,

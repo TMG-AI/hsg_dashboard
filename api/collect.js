@@ -165,6 +165,25 @@ export default async function handler(req, res) {
             continue;
           }
 
+          // FILTER: Check blocked sources (comma-separated domains)
+          if (link) {
+            const blockedSources = (process.env.BLOCKED_SOURCES || "").toLowerCase().split(',').map(s => s.trim()).filter(Boolean);
+            if (blockedSources.length > 0) {
+              try {
+                const hostname = new URL(link).hostname.toLowerCase();
+                const isBlocked = blockedSources.some(blocked =>
+                  hostname === blocked || hostname.endsWith('.' + blocked) || hostname === 'www.' + blocked
+                );
+                if (isBlocked) {
+                  console.log(`Blocked RSS article from ${hostname}: "${title}"`);
+                  continue;
+                }
+              } catch (e) {
+                // Invalid URL, continue anyway
+              }
+            }
+          }
+
           // No keyword filtering - accept all articles
           const canon = normalizeUrl(link || title);
           if (!canon) continue;

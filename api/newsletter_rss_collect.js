@@ -103,7 +103,7 @@ function matchesChinaKeywords(text) {
 function idFromCanonical(c) {
   let h = 0;
   for (let i = 0; i < c.length; i++) h = (h * 31 + c.charCodeAt(i)) >>> 0;
-  return `newsletter_rss_${h.toString(16)}`;
+  return `newsletter_${h.toString(16)}`; // Changed from newsletter_rss to match origin field
 }
 
 function toEpoch(d) {
@@ -152,6 +152,26 @@ export default async function handler(req, res) {
 
           found++;
 
+          // Check blocked sources (comma-separated domains)
+          if (link && link !== "#" && link.trim() !== "") {
+            const blockedSources = (process.env.BLOCKED_SOURCES || "").toLowerCase().split(',').map(s => s.trim()).filter(Boolean);
+            if (blockedSources.length > 0) {
+              try {
+                const hostname = new URL(link).hostname.toLowerCase();
+                const isBlocked = blockedSources.some(blocked =>
+                  hostname === blocked || hostname.endsWith('.' + blocked) || hostname === 'www.' + blocked
+                );
+                if (isBlocked) {
+                  console.log(`Blocked newsletter article from ${hostname}: "${title}"`);
+                  skipped++;
+                  continue;
+                }
+              } catch (e) {
+                // Invalid URL, continue anyway
+              }
+            }
+          }
+
           // Handle articles without links
           let canon;
           let finalLink;
@@ -162,7 +182,7 @@ export default async function handler(req, res) {
             const uniqueStr = `${title}_${feedTitle}_${ts}`;
             let h = 0;
             for (let i = 0; i < uniqueStr.length; i++) h = (h * 31 + uniqueStr.charCodeAt(i)) >>> 0;
-            canon = `newsletter_rss_${h.toString(16)}`;
+            canon = `newsletter_${h.toString(16)}`; // Changed to match idFromCanonical prefix
             finalLink = `https://newsletter.internal/${normalizeHost(feedTitle).replace(/\s+/g, '-')}/${canon}`;
           } else {
             canon = normalizeUrl(link);

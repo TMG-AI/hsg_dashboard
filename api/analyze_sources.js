@@ -119,6 +119,13 @@ export default async function handler(req, res) {
     // Sort by count (highest first)
     uniqueLowQuality.sort((a, b) => b.count - a.count);
 
+    // Compact low-quality summary (no sample titles)
+    const compactLowQuality = uniqueLowQuality.map(s => ({
+      source: s.source,
+      count: s.count,
+      percentage: s.percentage
+    }));
+
     return res.status(200).json({
       ok: true,
       summary: {
@@ -126,7 +133,8 @@ export default async function handler(req, res) {
         unique_sources: sortedSources.length,
         unique_origins: Object.keys(byOrigin).length,
         low_quality_source_count: uniqueLowQuality.length,
-        low_quality_article_count: uniqueLowQuality.reduce((sum, s) => sum + s.count, 0)
+        low_quality_article_count: uniqueLowQuality.reduce((sum, s) => sum + s.count, 0),
+        low_quality_percentage: ((uniqueLowQuality.reduce((sum, s) => sum + s.count, 0) / articles.length) * 100).toFixed(2)
       },
       by_origin: Object.entries(byOrigin)
         .map(([origin, count]) => ({
@@ -135,15 +143,18 @@ export default async function handler(req, res) {
           percentage: ((count / articles.length) * 100).toFixed(2)
         }))
         .sort((a, b) => b.count - a.count),
-      top_20_sources: sortedSources.slice(0, 20),
-      low_quality_candidates: {
-        youtube: youtubeArticles,
-        social_media: socialMediaSources,
-        unknown: unknownSources,
-        blogs: potentialBlogs,
-        all_unique: uniqueLowQuality
-      },
-      all_sources: sortedSources
+      top_30_sources: sortedSources.slice(0, 30).map(s => ({
+        source: s.source,
+        count: s.count,
+        percentage: s.percentage
+      })),
+      low_quality_candidates: compactLowQuality,
+      recommendations: {
+        suggested_blocks: uniqueLowQuality
+          .filter(s => s.count >= 5) // Only suggest blocking sources with 5+ articles
+          .slice(0, 20) // Top 20 low-quality sources
+          .map(s => s.source)
+      }
     });
 
   } catch (e) {

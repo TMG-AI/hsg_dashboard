@@ -45,6 +45,23 @@ export default async function handler(req, res){
 
     if (!link) return res.status(200).json({ ok:true, stored:0, note:"missing link" });
 
+    // Check blocked sources (comma-separated domains)
+    const blockedSources = (process.env.BLOCKED_SOURCES || "").toLowerCase().split(',').map(s => s.trim()).filter(Boolean);
+    if (blockedSources.length > 0) {
+      try {
+        const hostname = new URL(link).hostname.toLowerCase();
+        const isBlocked = blockedSources.some(blocked =>
+          hostname === blocked || hostname.endsWith('.' + blocked) || hostname === 'www.' + blocked
+        );
+        if (isBlocked) {
+          console.log(`Blocked article from ${hostname}: "${title}"`);
+          return res.status(200).json({ ok:true, stored:0, note:"blocked source", source: hostname });
+        }
+      } catch (e) {
+        // Invalid URL, continue anyway
+      }
+    }
+
     // de-dupe by canonical URL
     const first = await redis.sadd(SEEN_URL, link);
     if (first !== 1) return res.status(200).json({ ok:true, stored:0, note:"dupe" });

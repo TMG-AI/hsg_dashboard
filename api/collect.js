@@ -41,6 +41,24 @@ const RETENTION_DAYS = 14; // Keep articles for 14 days
 // Support both comma and semicolon delimiters for RSS_FEEDS
 const RSS_FEEDS = (process.env.RSS_FEEDS || "").split(/[,;]/).map(s => s.trim()).filter(Boolean);
 
+// Blocked sources - low quality/unverified content
+const BLOCKED_SOURCES = [
+  'youtube.com',
+  'youtu.be',
+  'prsync.com',
+  'jdsupra.com',
+  'mondaq.com',
+  'oxfordeagle.com',
+  'southjordanjournal.com',
+  'facebook.com',
+  'fb.com',
+  'vox.com',
+  'forex.com',
+  'cityindex.com',
+  'noahpinion.blog',
+  'electionlawblog.org'
+];
+
 // ---- helpers ----
 function normalizeUrl(u) {
   try {
@@ -165,22 +183,19 @@ export default async function handler(req, res) {
             continue;
           }
 
-          // FILTER: Check blocked sources (comma-separated domains)
+          // FILTER: Check blocked sources
           if (link) {
-            const blockedSources = (process.env.BLOCKED_SOURCES || "").toLowerCase().split(',').map(s => s.trim()).filter(Boolean);
-            if (blockedSources.length > 0) {
-              try {
-                const hostname = new URL(link).hostname.toLowerCase();
-                const isBlocked = blockedSources.some(blocked =>
-                  hostname === blocked || hostname.endsWith('.' + blocked) || hostname === 'www.' + blocked
-                );
-                if (isBlocked) {
-                  console.log(`Blocked RSS article from ${hostname}: "${title}"`);
-                  continue;
-                }
-              } catch (e) {
-                // Invalid URL, continue anyway
+            try {
+              const hostname = new URL(link).hostname.toLowerCase();
+              const isBlocked = BLOCKED_SOURCES.some(blocked =>
+                hostname === blocked || hostname.endsWith('.' + blocked) || hostname === 'www.' + blocked
+              );
+              if (isBlocked) {
+                console.log(`Blocked RSS article from ${hostname}: "${title}"`);
+                continue;
               }
+            } catch (e) {
+              // Invalid URL, continue anyway
             }
           }
 

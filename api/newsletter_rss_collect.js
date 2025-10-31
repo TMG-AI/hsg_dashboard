@@ -42,6 +42,24 @@ const NEWSLETTER_RSS_FEEDS = (process.env.NEWSLETTER_RSS_FEEDS || "")
   .map(s => s.trim())
   .filter(Boolean);
 
+// Blocked sources - low quality/unverified content
+const BLOCKED_SOURCES = [
+  'youtube.com',
+  'youtu.be',
+  'prsync.com',
+  'jdsupra.com',
+  'mondaq.com',
+  'oxfordeagle.com',
+  'southjordanjournal.com',
+  'facebook.com',
+  'fb.com',
+  'vox.com',
+  'forex.com',
+  'cityindex.com',
+  'noahpinion.blog',
+  'electionlawblog.org'
+];
+
 // Helper functions
 function normalizeUrl(u) {
   try {
@@ -152,23 +170,20 @@ export default async function handler(req, res) {
 
           found++;
 
-          // Check blocked sources (comma-separated domains)
+          // Check blocked sources
           if (link && link !== "#" && link.trim() !== "") {
-            const blockedSources = (process.env.BLOCKED_SOURCES || "").toLowerCase().split(',').map(s => s.trim()).filter(Boolean);
-            if (blockedSources.length > 0) {
-              try {
-                const hostname = new URL(link).hostname.toLowerCase();
-                const isBlocked = blockedSources.some(blocked =>
-                  hostname === blocked || hostname.endsWith('.' + blocked) || hostname === 'www.' + blocked
-                );
-                if (isBlocked) {
-                  console.log(`Blocked newsletter article from ${hostname}: "${title}"`);
-                  skipped++;
-                  continue;
-                }
-              } catch (e) {
-                // Invalid URL, continue anyway
+            try {
+              const hostname = new URL(link).hostname.toLowerCase();
+              const isBlocked = BLOCKED_SOURCES.some(blocked =>
+                hostname === blocked || hostname.endsWith('.' + blocked) || hostname === 'www.' + blocked
+              );
+              if (isBlocked) {
+                console.log(`Blocked newsletter article from ${hostname}: "${title}"`);
+                skipped++;
+                continue;
               }
+            } catch (e) {
+              // Invalid URL, continue anyway
             }
           }
 

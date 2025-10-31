@@ -9,6 +9,24 @@ const redis = new Redis({
 const ZSET = "mentions:z";
 const SEEN_URL = "mentions:seen:canon";
 
+// Blocked sources - low quality/unverified content
+const BLOCKED_SOURCES = [
+  'youtube.com',
+  'youtu.be',
+  'prsync.com',
+  'jdsupra.com',
+  'mondaq.com',
+  'oxfordeagle.com',
+  'southjordanjournal.com',
+  'facebook.com',
+  'fb.com',
+  'vox.com',
+  'forex.com',
+  'cityindex.com',
+  'noahpinion.blog',
+  'electionlawblog.org'
+];
+
 function normalizeUrl(u){
   try{
     const url = new URL(u);
@@ -45,21 +63,18 @@ export default async function handler(req, res){
 
     if (!link) return res.status(200).json({ ok:true, stored:0, note:"missing link" });
 
-    // Check blocked sources (comma-separated domains)
-    const blockedSources = (process.env.BLOCKED_SOURCES || "").toLowerCase().split(',').map(s => s.trim()).filter(Boolean);
-    if (blockedSources.length > 0) {
-      try {
-        const hostname = new URL(link).hostname.toLowerCase();
-        const isBlocked = blockedSources.some(blocked =>
-          hostname === blocked || hostname.endsWith('.' + blocked) || hostname === 'www.' + blocked
-        );
-        if (isBlocked) {
-          console.log(`Blocked article from ${hostname}: "${title}"`);
-          return res.status(200).json({ ok:true, stored:0, note:"blocked source", source: hostname });
-        }
-      } catch (e) {
-        // Invalid URL, continue anyway
+    // Check blocked sources
+    try {
+      const hostname = new URL(link).hostname.toLowerCase();
+      const isBlocked = BLOCKED_SOURCES.some(blocked =>
+        hostname === blocked || hostname.endsWith('.' + blocked) || hostname === 'www.' + blocked
+      );
+      if (isBlocked) {
+        console.log(`Blocked article from ${hostname}: "${title}"`);
+        return res.status(200).json({ ok:true, stored:0, note:"blocked source", source: hostname });
       }
+    } catch (e) {
+      // Invalid URL, continue anyway
     }
 
     // de-dupe by canonical URL

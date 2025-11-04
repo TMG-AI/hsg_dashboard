@@ -33,7 +33,7 @@ async function conductResearch(query, apiKey) {
       max_tokens: 4000,
       return_citations: true,
       search_recency_filter: 'month',
-      search_domain_filter: ['gov', 'edu', 'org'],
+      // Removed search_domain_filter - was blocking law firms (.com) and other important sources
       messages: [{
         role: 'user',
         content: `Conduct comprehensive research on: ${query}
@@ -61,31 +61,41 @@ Provide detailed analysis with extensive citations.`
   // LOG: Full API response structure
   console.log(`\n📥 RAW RESPONSE for "${query.substring(0, 40)}..."`);
   console.log(`Response keys:`, Object.keys(data));
+  console.log(`Full citations field:`, JSON.stringify(data.citations));
   console.log(`Choices:`, data.choices?.length || 0);
-  if (data.citations) console.log(`Top-level citations:`, data.citations.length);
-  if (data.choices?.[0]?.citations) console.log(`Choice-level citations:`, data.choices[0].citations.length);
-  if (data.choices?.[0]?.message?.citations) console.log(`Message-level citations:`, data.choices[0].message.citations.length);
 
   const content = data.choices?.[0]?.message?.content || '';
 
-  // Perplexity returns citations in multiple possible locations
-  const citations = data.citations ||
-                   data.choices?.[0]?.citations ||
-                   data.choices?.[0]?.message?.citations ||
-                   [];
+  // Perplexity returns citations as top-level array of URLs
+  let citations = [];
 
-  // Extract URLs from content if inline citations exist
+  if (Array.isArray(data.citations)) {
+    citations = data.citations;
+    console.log(`✅ Found ${citations.length} citations in data.citations array`);
+  } else if (data.citations) {
+    console.warn(`⚠️ data.citations exists but is not an array:`, typeof data.citations, data.citations);
+  } else {
+    console.warn(`⚠️ No data.citations field in response`);
+  }
+
+  // Fallback: Extract URLs from content if inline citations exist
   const urlMatches = content.match(/https?:\/\/[^\s\)]+/g) || [];
+  if (urlMatches.length > 0) {
+    console.log(`📎 Found ${urlMatches.length} URLs embedded in content`);
+  }
+
   const allCitations = [...new Set([...citations, ...urlMatches])]; // Deduplicate
 
   // LOG: Citation extraction results
-  console.log(`\n📊 CITATION EXTRACTION:`);
-  console.log(`  API citations: ${citations.length}`);
+  console.log(`\n📊 CITATION EXTRACTION SUMMARY:`);
+  console.log(`  API citations (data.citations): ${citations.length}`);
   console.log(`  URL matches in content: ${urlMatches.length}`);
   console.log(`  Total unique citations: ${allCitations.length}`);
   console.log(`  Content length: ${content.length} chars`);
   if (allCitations.length > 0) {
-    console.log(`  Sample citations:`, allCitations.slice(0, 3));
+    console.log(`  ✅ Sample citations:`, allCitations.slice(0, 3));
+  } else {
+    console.error(`  ❌ ZERO citations extracted! This will cause "0 sources" issue`);
   }
 
   return {
@@ -326,7 +336,13 @@ export default async function handler(req, res) {
 
     console.log('=== Research Stage Complete ===');
     researchResults.forEach((result, i) => {
-      console.log(`Query ${i + 1}: "${result.query.substring(0, 60)}..." - ${result.citations?.length || 0} sources`);
+      const citationCount = result.citations?.length || 0;
+      console.log(`Query ${i + 1}: "${result.query.substring(0, 60)}..." - ${citationCount} sources`);
+
+      if (citationCount === 0) {
+        console.warn(`  ⚠️ Query ${i + 1} returned ZERO citations!`);
+      }
+
       if (result.citations && result.citations.length > 0) {
         result.citations.forEach((citation) => {
           if (!masterCitationMap.has(citation)) {
@@ -339,8 +355,19 @@ export default async function handler(req, res) {
     });
 
     const totalSources = allCitationsWithUrls.length;
-    console.log(`Total unique sources collected: ${totalSources}`);
-    console.log(`Stage 1 Complete: ${totalSources} sources found in ${researchTime}s`);
+    console.log(`\n📚 MASTER CITATION LIST BUILT:`);
+    console.log(`  Total unique sources collected: ${totalSources}`);
+    console.log(`  Stage 1 Complete: ${totalSources} sources found in ${researchTime}s`);
+
+    if (totalSources === 0) {
+      console.error(`\n❌❌❌ CRITICAL: ZERO sources collected from all ${RESEARCH_QUERIES.length} queries!`);
+      console.error(`This will result in "0 sources cited" even if briefing has citation numbers.`);
+      console.error(`Check the individual query logs above to see why citations are not being extracted.`);
+    } else if (totalSources < 20) {
+      console.warn(`\n⚠️ Warning: Only ${totalSources} sources collected (expected 40-100+)`);
+    } else {
+      console.log(`\n✅ Successfully collected ${totalSources} sources for synthesis`);
+    }
 
     // Format research with proper citation mapping
     const combinedResearch = researchResults
@@ -397,8 +424,8 @@ export default async function handler(req, res) {
     }
 
     // Add metadata header to briefing
-    const briefingWithMetadata = `---
-**WEEKLY POLICY BRIEFING: NATIONAL SECURITY & INVESTMENT DEVELOPMENTS**
+    const briefingWithMetadata = `# WEEKLY POLICY BRIEFING: NATIONAL SECURITY & INVESTMENT DEVELOPMENTS
+
 **Prepared for:** HSG
 **Period Covered:** ${startDate} – ${endDate}
 **Generated:** ${new Date().toLocaleString('en-US', {
@@ -413,6 +440,7 @@ export default async function handler(req, res) {
 **Classification:** Strategic Intelligence – Senior Leadership
 **Sources Cited:** ${synthesis.citedSourceCount} | **Sources Researched:** ${synthesis.collectedSourceCount}
 **Research Depth:** ${synthesis.researchCount} comprehensive queries
+
 ---
 
 ${synthesis.briefing}`;

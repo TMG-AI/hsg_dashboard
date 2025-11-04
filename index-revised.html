@@ -796,7 +796,7 @@
       loading.style.display = 'flex';
       response.style.display = 'none';
 
-      const question = 'Please provide a comprehensive summary of all articles from this week. Include: 1) Main themes and topics, 2) Key developments by category (Google Alerts, Congress, Newsletter), 3) Any notable trends or patterns, 4) Important Congress bills if any.';
+      const question = 'Prepare a weekly national-security–style policy briefing covering all articles from this week. Structure it according to the memo format with: Executive Summary (5 bullets max), Policy & Legislative Updates, National Security & Tech Policy, Outbound Investment & Foreign Investment Review, China Policy & Global Reactions, and an optional Analysis Section. Use BLUF format for each entry with headlines, key points, and HongShan relevance analysis.';
 
       try {
         const res = await fetch('/api/chat', {
@@ -860,23 +860,37 @@
       response.style.display = 'none';
       saveSection.style.display = 'none';
 
-      const prompt = `Create a professional client summary for the following article. The article text includes the headline. Follow this exact format:
+      const prompt = `Create a professional client summary for the following article about China-related news. Follow these guidelines:
 
-[Article Title]
-Summary: [2-4 sentences covering the key points]
+FORMAT - YOU MUST OUTPUT EXACTLY THIS STRUCTURE:
+Line 1: [Article Headline] – [Source Publication]
+Line 2: Summary: [Single paragraph summary, 3-6 sentences]
 
-Guidelines:
-- Extract the article title from the first line or headline of the pasted text
-- Start the summary with "Summary: "
-- Write 2-4 sentences (typically 3-4)
-- Use professional, factual, neutral tone
-- First sentence: What happened/was announced and when (include specific date if mentioned)
-- Middle sentences: Key details, context, implications
-- Last sentence (if needed): Additional context or reactions
-- Include specific names, titles, roles when mentioned
+IMPORTANT:
+- Line 1 MUST contain the article's original headline and the source publication name separated by " – " (em dash)
+- Line 2 MUST start with "Summary:" followed by the summary paragraph
+- Do NOT make Line 1 bold or add any markdown formatting - just plain text
+- Do NOT skip the headline - it MUST be included
+
+CONTENT REQUIREMENTS:
+- Start the summary with the date of the event, announcement, or policy action
+- State what happened, who was involved, and the implications
+- Use clear, journalistic language appropriate for policy reporting
+- Capture important nuances: if policy is contingent, provisional, or under negotiation, note thresholds, deadlines, or pending conditions
+- If the article contains no clear policy shift or significant development, state this explicitly
+
+NAMING CONVENTIONS:
+- U.S. Congress members: Use title + full name + (Party-State-District)
+  Examples: Senator John Hickenlooper (D-CO), Rep. Rick Crawford (R-AR-01), Congresswoman Elise Stefanik (R-NY-21)
+- Do NOT use "U.S." prefix before congressional names
+- Include specific names, titles, and roles for all key figures
+
+STYLE:
+- Professional, factual, neutral tone
 - Focus on actionable facts and key developments
 - Include relevant policy/legislative details
 - Note reactions from stakeholders when significant
+- No bullet points, no external sources, no hyperlinks
 
 Full Article Text (including headline):
 ${articleText}`;
@@ -896,7 +910,7 @@ ${articleText}`;
 
         if (data.ok) {
           // Extract and format the response
-          let formattedAnswer = data.answer;
+          let formattedAnswer = data.answer.trim();
 
           // Remove brackets around title if present
           formattedAnswer = formattedAnswer.replace(/^\[([^\]]+)\]/, '$1');
@@ -904,21 +918,32 @@ ${articleText}`;
           // Split into lines
           const lines = formattedAnswer.split('\n').filter(line => line.trim());
 
-          // First line should be the title
-          const titleLine = lines[0].trim();
+          // First line should be: "Headline – Source"
+          const titleLine = lines[0]?.trim() || '';
 
-          // Find the summary part (starts with "Summary:")
-          const summaryLines = lines.filter(line => line.includes('Summary:'));
-          const otherLines = lines.filter(line => !line.includes('Summary:') && line !== titleLine);
+          // Second line should start with "Summary:"
+          const summaryLines = lines.slice(1).filter(line => line.trim());
 
-          // Reconstruct: Title (bold) + Summary + other content
+          // Escape HTML characters
           const escapeForHtml = (str) => str.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-          let reconstructed = `<strong>${escapeForHtml(titleLine)}</strong>`;
-          if (summaryLines.length > 0) {
-            reconstructed += '<br/>' + summaryLines.map(l => escapeForHtml(l)).join('<br/>');
+
+          // Reconstruct: Headline (bold, NOT the summary)
+          let reconstructed = '';
+
+          if (titleLine) {
+            // Only make the headline bold, remove any markdown formatting
+            const cleanTitle = titleLine.replace(/\*\*/g, '');
+            reconstructed = `<strong>${escapeForHtml(cleanTitle)}</strong>`;
           }
-          if (otherLines.length > 0) {
-            reconstructed += '<br/>' + otherLines.map(l => escapeForHtml(l)).join('<br/>');
+
+          // Add summary lines WITHOUT bold formatting
+          if (summaryLines.length > 0) {
+            const summaryText = summaryLines.map(l => {
+              // Remove any bold markdown from summary
+              const cleanLine = l.replace(/\*\*/g, '');
+              return escapeForHtml(cleanLine);
+            }).join(' ');
+            reconstructed += '<br/><br/>' + summaryText;
           }
 
           currentClientTitle = titleLine;

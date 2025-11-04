@@ -1,0 +1,468 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Perplexity Briefing - HSG Dashboard</title>
+  <style>
+    *{box-sizing:border-box}
+    body{
+      font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;
+      margin:0;
+      background:#fafbfc;
+      min-height:100vh;color:#1a1a1a
+    }
+    header{
+      background:#4a6741;
+      color:#fff;
+    }
+    .header-content{max-width:1200px;margin:0 auto;padding:20px 32px;display:flex;align-items:center;justify-content:space-between}
+    .header-title{margin:0;font-size:32px;font-weight:700;letter-spacing:-.02em}
+    .header-subtitle{margin:8px 0 0 0;font-size:14px;opacity:0.9;font-weight:400}
+    .back-btn{background:rgba(255,255,255,.2);color:#fff;border:none;padding:10px 20px;border-radius:10px;font-weight:600;cursor:pointer;transition:.3s;text-decoration:none;display:inline-block}
+    .back-btn:hover{background:rgba(255,255,255,.3);transform:translateY(-1px)}
+
+    .wrap{max-width:1200px;margin:0 auto;padding:32px 24px}
+
+    .generate-card{background:#fff;border-radius:16px;box-shadow:0 4px 20px rgba(0,0,0,.12);padding:32px;margin-bottom:24px;border:1px solid rgba(139,195,74,.2);text-align:center}
+    .generate-card::before{content:'';position:absolute;top:0;left:0;width:100%;height:4px;background:linear-gradient(90deg,#8bc34a,#7cb342);border-radius:16px 16px 0 0}
+
+    .generate-btn{background:#4a6741;color:#fff;border:none;padding:16px 48px;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;transition:.3s;width:100%;max-width:400px}
+    .generate-btn:hover{background:#5a7c50;transform:translateY(-2px);box-shadow:0 6px 20px rgba(74,103,65,.3)}
+    .generate-btn:disabled{background:#ccc;cursor:not-allowed;transform:none}
+
+    .info-text{color:#666;font-size:14px;margin-top:16px;line-height:1.6}
+
+    .briefing-card{background:#fff;border-radius:16px;box-shadow:0 4px 20px rgba(0,0,0,.12);padding:32px;margin-bottom:16px;border:1px solid rgba(139,195,74,.2);position:relative}
+    .briefing-card::before{content:'';position:absolute;top:0;left:0;width:100%;height:4px;background:linear-gradient(90deg,#8bc34a,#7cb342);border-radius:16px 16px 0 0}
+
+    .briefing-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid rgba(139,195,74,.2)}
+    .briefing-title{font-size:20px;font-weight:700;color:#1a1a1a;margin:0}
+    .briefing-meta{color:#666;font-size:13px;margin-top:8px}
+
+    .action-buttons{display:flex;gap:12px;margin-bottom:24px;flex-wrap:wrap}
+    .action-btn{flex:1;min-width:180px;background:#4a6741;color:#fff;border:none;padding:12px 24px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;transition:.3s}
+    .action-btn:hover{background:#5a7c50;transform:translateY(-1px)}
+    .action-btn.copy{background:#2196F3}
+    .action-btn.copy:hover{background:#1976D2}
+    .action-btn.regenerate{background:#FF9800}
+    .action-btn.regenerate:hover{background:#F57C00}
+
+    .briefing-content{color:#333;font-size:15px;line-height:1.8}
+    .briefing-content h2{font-size:22px;font-weight:700;color:#1a1a1a;margin:32px 0 16px 0;padding-bottom:8px;border-bottom:2px solid rgba(139,195,74,.3)}
+    .briefing-content h3{font-size:18px;font-weight:600;color:#1a1a1a;margin:24px 0 12px 0}
+    .briefing-content p{margin:12px 0;line-height:1.7}
+    .briefing-content ul{margin:12px 0;padding-left:24px}
+    .briefing-content li{margin:8px 0}
+    .briefing-content strong{font-weight:700;color:#1a1a1a}
+    .briefing-content a{color:#2196F3;text-decoration:none}
+    .briefing-content a:hover{text-decoration:underline}
+
+    .loading{display:none;align-items:center;justify-content:center;padding:40px;color:#666}
+    .loading.active{display:flex}
+    .loading::before{content:'';width:20px;height:20px;border:2px solid rgba(139,195,74,.3);border-top:2px solid #8bc34a;border-radius:50%;animation:spin 1s linear infinite;margin-right:12px}
+    @keyframes spin{0%{transform:rotate(0)}100%{transform:rotate(360deg)}}
+
+    .loading-text{font-size:15px;font-weight:600}
+    .loading-subtext{font-size:13px;color:#999;margin-top:8px}
+
+    .error-state{background:#fff3cd;border:1px solid #ffecb5;color:#856404;padding:20px;border-radius:12px;margin-bottom:24px}
+    .error-state strong{display:block;margin-bottom:8px;font-size:16px}
+
+    .empty-state{text-align:center;padding:60px 20px;color:#666;background:#fff;border-radius:16px;border:1px solid rgba(139,195,74,.2)}
+    .empty-state-icon{font-size:48px;margin-bottom:16px;opacity:.5}
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="header-content">
+      <div>
+        <h1 class="header-title">Perplexity Briefing</h1>
+        <p class="header-subtitle">Weekly HSG Policy Briefing powered by Perplexity AI</p>
+      </div>
+      <a href="/" class="back-btn">← Back to Dashboard</a>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <!-- Generate Section -->
+    <div class="generate-card" id="generate-section">
+      <button id="generate-btn" class="generate-btn" onclick="generateBriefing()">
+        🔍 Generate Weekly Briefing
+      </button>
+      <p class="info-text">
+        Click to generate a comprehensive weekly policy briefing covering the past 7 days.<br>
+        Perplexity AI will research 50+ authoritative sources on U.S.-China policy, investment regulations, and national security developments.
+      </p>
+    </div>
+
+    <!-- Loading State -->
+    <div id="loading" class="loading">
+      <div>
+        <div class="loading-text">🔍 Conducting deep research across 50+ sources...</div>
+        <div class="loading-subtext">This may take 30-60 seconds</div>
+      </div>
+    </div>
+
+    <!-- Error State -->
+    <div id="error-container"></div>
+
+    <!-- Briefing Display -->
+    <div id="briefing-container" style="display:none">
+      <div class="briefing-card">
+        <div class="briefing-header">
+          <div>
+            <h2 class="briefing-title">Weekly HSG Policy Briefing</h2>
+            <div class="briefing-meta" id="briefing-meta"></div>
+          </div>
+        </div>
+
+        <div class="action-buttons">
+          <button class="action-btn" onclick="exportToWord()">📄 Download as Word</button>
+          <button class="action-btn copy" onclick="copyToClipboard()">📋 Copy to Clipboard</button>
+          <button class="action-btn regenerate" onclick="regenerateBriefing()">🔄 Regenerate</button>
+        </div>
+
+        <div class="briefing-content" id="briefing-content"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Load libraries -->
+  <script src="https://unpkg.com/docx@8.5.0/build/index.umd.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+  <script>
+    let currentBriefing = null;
+    let currentDateRange = null;
+
+    function getWeeklyDateRange() {
+      const today = new Date();
+      const weekAgo = new Date(today);
+      weekAgo.setDate(weekAgo.getDate() - 7);
+
+      const formatDate = (date) => date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+
+      return {
+        startDate: formatDate(weekAgo),
+        endDate: formatDate(today)
+      };
+    }
+
+    async function generateBriefing() {
+      const generateBtn = document.getElementById('generate-btn');
+      const loading = document.getElementById('loading');
+      const errorContainer = document.getElementById('error-container');
+      const briefingContainer = document.getElementById('briefing-container');
+
+      // Reset UI
+      generateBtn.disabled = true;
+      generateBtn.textContent = '⏳ Generating...';
+      loading.classList.add('active');
+      errorContainer.innerHTML = '';
+      briefingContainer.style.display = 'none';
+
+      try {
+        const dateRange = getWeeklyDateRange();
+        currentDateRange = dateRange;
+
+        const response = await fetch('/api/generate_briefing', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(dateRange)
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || `HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+
+        if (!data.ok) {
+          throw new Error(data.error || 'Failed to generate briefing');
+        }
+
+        currentBriefing = data.briefing;
+
+        // Display briefing
+        document.getElementById('briefing-meta').textContent =
+          `Coverage: ${data.startDate} – ${data.endDate} | Generated: ${new Date(data.generatedAt).toLocaleString('en-US')}`;
+
+        document.getElementById('briefing-content').innerHTML = marked.parse(currentBriefing);
+        briefingContainer.style.display = 'block';
+
+        // Scroll to briefing
+        briefingContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+      } catch (error) {
+        console.error('Error generating briefing:', error);
+        errorContainer.innerHTML = `
+          <div class="error-state">
+            <strong>❌ Error generating briefing</strong>
+            ${error.message}
+          </div>
+        `;
+      } finally {
+        loading.classList.remove('active');
+        generateBtn.disabled = false;
+        generateBtn.textContent = '🔍 Generate Weekly Briefing';
+      }
+    }
+
+    async function regenerateBriefing() {
+      if (confirm('Regenerate the briefing? This will create a new version with updated research.')) {
+        await generateBriefing();
+      }
+    }
+
+    async function copyToClipboard() {
+      if (!currentBriefing) {
+        alert('No briefing to copy');
+        return;
+      }
+
+      try {
+        await navigator.clipboard.writeText(currentBriefing);
+
+        // Visual feedback
+        const btn = event.target;
+        const originalText = btn.textContent;
+        btn.textContent = '✓ Copied!';
+        btn.style.background = '#4caf50';
+
+        setTimeout(() => {
+          btn.textContent = originalText;
+          btn.style.background = '#2196F3';
+        }, 2000);
+      } catch (error) {
+        alert('Failed to copy to clipboard: ' + error.message);
+      }
+    }
+
+    async function exportToWord() {
+      if (!currentBriefing || !currentDateRange) {
+        alert('No briefing to export');
+        return;
+      }
+
+      try {
+        const children = [];
+
+        // Document title
+        children.push(
+          new docx.Paragraph({
+            text: "WEEKLY POLICY BRIEFING",
+            heading: docx.HeadingLevel.TITLE,
+            alignment: docx.AlignmentType.CENTER,
+            spacing: { after: 200 }
+          })
+        );
+
+        children.push(
+          new docx.Paragraph({
+            text: "NATIONAL SECURITY & INVESTMENT DEVELOPMENTS",
+            heading: docx.HeadingLevel.HEADING_1,
+            alignment: docx.AlignmentType.CENTER,
+            spacing: { after: 400 }
+          })
+        );
+
+        // Metadata
+        const today = new Date().toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        });
+
+        children.push(
+          new docx.Paragraph({
+            children: [
+              new docx.TextRun({ text: "Prepared for: ", bold: true }),
+              new docx.TextRun("HSG")
+            ],
+            spacing: { after: 100 }
+          })
+        );
+
+        children.push(
+          new docx.Paragraph({
+            children: [
+              new docx.TextRun({ text: "Period Covered: ", bold: true }),
+              new docx.TextRun(`${currentDateRange.startDate} – ${currentDateRange.endDate}`)
+            ],
+            spacing: { after: 100 }
+          })
+        );
+
+        children.push(
+          new docx.Paragraph({
+            children: [
+              new docx.TextRun({ text: "Generated: ", bold: true }),
+              new docx.TextRun(today)
+            ],
+            spacing: { after: 100 }
+          })
+        );
+
+        children.push(
+          new docx.Paragraph({
+            children: [
+              new docx.TextRun({ text: "Source: ", bold: true }),
+              new docx.TextRun("Perplexity AI Research")
+            ],
+            spacing: { after: 400 }
+          })
+        );
+
+        // Divider
+        children.push(
+          new docx.Paragraph({
+            text: "_______________________________________________________________________________",
+            spacing: { after: 400 }
+          })
+        );
+
+        // Parse markdown content
+        const lines = currentBriefing.split('\n');
+
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i].trim();
+
+          if (!line) {
+            children.push(new docx.Paragraph({ text: "", spacing: { after: 100 } }));
+            continue;
+          }
+
+          // H2 headers (## Header)
+          if (line.startsWith('## ')) {
+            children.push(
+              new docx.Paragraph({
+                text: line.replace('## ', '').replace(/\*\*/g, ''),
+                heading: docx.HeadingLevel.HEADING_1,
+                spacing: { before: 400, after: 200 }
+              })
+            );
+            continue;
+          }
+
+          // H3 headers (### Header)
+          if (line.startsWith('### ')) {
+            children.push(
+              new docx.Paragraph({
+                text: line.replace('### ', '').replace(/\*\*/g, ''),
+                heading: docx.HeadingLevel.HEADING_2,
+                spacing: { before: 300, after: 150 }
+              })
+            );
+            continue;
+          }
+
+          // Bullet points
+          if (line.startsWith('- ') || line.startsWith('* ')) {
+            const text = line.substring(2).replace(/\*\*/g, '');
+            children.push(
+              new docx.Paragraph({
+                text: text,
+                bullet: { level: 0 },
+                spacing: { after: 100 }
+              })
+            );
+            continue;
+          }
+
+          // Regular paragraphs - parse bold and citations
+          const textRuns = parseInlineFormatting(line);
+          children.push(
+            new docx.Paragraph({
+              children: textRuns,
+              spacing: { after: 150 }
+            })
+          );
+        }
+
+        // Create document
+        const doc = new docx.Document({
+          sections: [{
+            properties: {
+              page: {
+                margin: {
+                  top: docx.convertInchesToTwip(1),
+                  right: docx.convertInchesToTwip(1),
+                  bottom: docx.convertInchesToTwip(1),
+                  left: docx.convertInchesToTwip(1),
+                }
+              }
+            },
+            children: children
+          }]
+        });
+
+        // Generate and download
+        const blob = await docx.Packer.toBlob(doc);
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+
+        const filename = `HSG-Weekly-Briefing-${currentDateRange.endDate.replace(/\s+/g, '-')}.docx`;
+        link.download = filename;
+
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+
+        // Visual feedback
+        const btn = event.target;
+        const originalText = btn.textContent;
+        btn.textContent = '✓ Exported!';
+        btn.style.background = '#4caf50';
+
+        setTimeout(() => {
+          btn.textContent = originalText;
+          btn.style.background = '#4a6741';
+        }, 2000);
+
+      } catch (error) {
+        alert(`Error exporting to Word: ${error.message}`);
+        console.error('Word export error:', error);
+      }
+    }
+
+    function parseInlineFormatting(text) {
+      const runs = [];
+      const regex = /(\*\*[^*]+\*\*|\[\d+\](?:\[\d+\])*|[^*\[]+)/g;
+      const matches = text.match(regex) || [text];
+
+      matches.forEach(match => {
+        if (match.startsWith('**') && match.endsWith('**')) {
+          // Bold text
+          runs.push(new docx.TextRun({
+            text: match.slice(2, -2),
+            bold: true
+          }));
+        } else if (match.match(/^\[\d+\]/)) {
+          // Citations
+          runs.push(new docx.TextRun({
+            text: match,
+            superscript: true,
+            color: "0000FF"
+          }));
+        } else {
+          // Regular text
+          runs.push(new docx.TextRun(match));
+        }
+      });
+
+      return runs;
+    }
+  </script>
+
+</body>
+</html>

@@ -33,7 +33,7 @@ async function conductResearch(query, apiKey) {
       max_tokens: 4000,
       return_citations: true,
       search_recency_filter: 'month',
-      // Removed search_domain_filter - was blocking law firms (.com) and other important sources
+      search_domain_filter: ['gov', 'edu', 'org'],
       messages: [{
         role: 'user',
         content: `Conduct comprehensive research on: ${query}

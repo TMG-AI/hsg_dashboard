@@ -93,15 +93,16 @@
       </button>
       <p class="info-text">
         Click to generate a comprehensive weekly policy briefing covering the past 7 days.<br>
-        Perplexity AI will research 50+ authoritative sources on U.S.-China policy, investment regulations, and national security developments.
+        Perplexity AI will conduct multi-stage research across 12 policy areas, analyzing 50+ authoritative sources including .gov sites, think tanks, and legal firm alerts.<br>
+        <strong>Generation time: 2-5 minutes</strong>
       </p>
     </div>
 
     <!-- Loading State -->
     <div id="loading" class="loading">
       <div>
-        <div class="loading-text">🔍 Conducting deep research across 50+ sources...</div>
-        <div class="loading-subtext">This may take 30-60 seconds</div>
+        <div class="loading-text">🔍 Stage 1: Conducting parallel research across 12 policy areas...</div>
+        <div class="loading-subtext">This comprehensive briefing may take 2-5 minutes to generate</div>
       </div>
     </div>
 
@@ -190,9 +191,13 @@
 
         currentBriefing = data.briefing;
 
-        // Display briefing
-        document.getElementById('briefing-meta').textContent =
-          `Coverage: ${data.startDate} – ${data.endDate} | Generated: ${new Date(data.generatedAt).toLocaleString('en-US')}`;
+        // Display briefing with metadata
+        const meta = data.metadata || {};
+        document.getElementById('briefing-meta').innerHTML = `
+          <div>Coverage: ${data.startDate} – ${data.endDate}</div>
+          <div>Generated: ${new Date(data.generatedAt).toLocaleString('en-US')}</div>
+          ${meta.wordCount ? `<div style="margin-top:8px">📊 ${meta.wordCount.toLocaleString()} words | ${meta.citationCount} citations | ${meta.sourceCount} sources | ${meta.generationTimeSeconds}s</div>` : ''}
+        `;
 
         document.getElementById('briefing-content').innerHTML = marked.parse(currentBriefing);
         briefingContainer.style.display = 'block';

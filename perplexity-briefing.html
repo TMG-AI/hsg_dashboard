@@ -196,7 +196,7 @@
         document.getElementById('briefing-meta').innerHTML = `
           <div>Coverage: ${data.startDate} – ${data.endDate}</div>
           <div>Generated: ${new Date(data.generatedAt).toLocaleString('en-US')}</div>
-          ${meta.wordCount ? `<div style="margin-top:8px">📊 ${meta.wordCount.toLocaleString()} words | ${meta.citationCount} citations | ${meta.sourceCount} sources | ${meta.generationTimeSeconds}s</div>` : ''}
+          ${meta.wordCount ? `<div style="margin-top:8px">📊 ${meta.wordCount.toLocaleString()} words | ${meta.citationInstanceCount} citations | ${meta.citedSourceCount} sources cited | ${meta.collectedSourceCount} sources researched | ${meta.generationTimeSeconds}s</div>` : ''}
         `;
 
         document.getElementById('briefing-content').innerHTML = marked.parse(currentBriefing);

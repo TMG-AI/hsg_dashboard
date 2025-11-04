@@ -57,6 +57,15 @@ Provide detailed analysis with extensive citations.`
   }
 
   const data = await response.json();
+
+  // LOG: Full API response structure
+  console.log(`\n📥 RAW RESPONSE for "${query.substring(0, 40)}..."`);
+  console.log(`Response keys:`, Object.keys(data));
+  console.log(`Choices:`, data.choices?.length || 0);
+  if (data.citations) console.log(`Top-level citations:`, data.citations.length);
+  if (data.choices?.[0]?.citations) console.log(`Choice-level citations:`, data.choices[0].citations.length);
+  if (data.choices?.[0]?.message?.citations) console.log(`Message-level citations:`, data.choices[0].message.citations.length);
+
   const content = data.choices?.[0]?.message?.content || '';
 
   // Perplexity returns citations in multiple possible locations
@@ -69,9 +78,14 @@ Provide detailed analysis with extensive citations.`
   const urlMatches = content.match(/https?:\/\/[^\s\)]+/g) || [];
   const allCitations = [...new Set([...citations, ...urlMatches])]; // Deduplicate
 
-  console.log(`Research "${query.substring(0, 50)}...": ${content.length} chars, ${allCitations.length} citations`);
+  // LOG: Citation extraction results
+  console.log(`\n📊 CITATION EXTRACTION:`);
+  console.log(`  API citations: ${citations.length}`);
+  console.log(`  URL matches in content: ${urlMatches.length}`);
+  console.log(`  Total unique citations: ${allCitations.length}`);
+  console.log(`  Content length: ${content.length} chars`);
   if (allCitations.length > 0) {
-    console.log(`Sample citations:`, allCitations.slice(0, 2));
+    console.log(`  Sample citations:`, allCitations.slice(0, 3));
   }
 
   return {
@@ -230,21 +244,49 @@ Target: 8,000-10,000 words total with EXTENSIVE citations throughout.`;
   const data = await response.json();
   let briefingText = data.choices[0].message.content;
 
-  // Append sources list at the end
-  const sourcesAppendix = `
+  // LOG: Analyze which citations were actually used
+  console.log(`\n🔍 CITATION ANALYSIS:`);
+  const citationMatches = briefingText.match(/\[(\d+)\]/g) || [];
+  const uniqueCitationNumbers = [...new Set(citationMatches.map(m => parseInt(m.match(/\d+/)[0])))];
+  console.log(`  Total citation instances: ${citationMatches.length}`);
+  console.log(`  Unique citation numbers used: ${uniqueCitationNumbers.length}`);
+  console.log(`  Citation numbers: [${uniqueCitationNumbers.sort((a, b) => a - b).join(', ')}]`);
+  console.log(`  Sources collected: ${totalSources}`);
+  console.log(`  Sources actually cited: ${uniqueCitationNumbers.length}`);
+  console.log(`  Unused sources: ${totalSources - uniqueCitationNumbers.length}`);
+
+  // Separate cited vs unused sources
+  const citedSources = allCitationsWithUrls.filter(c => uniqueCitationNumbers.includes(c.number));
+  const unusedSources = allCitationsWithUrls.filter(c => !uniqueCitationNumbers.includes(c.number));
+
+  // Build sources appendix with ONLY cited sources
+  let sourcesAppendix = `
 
 ---
 
 ## SOURCES CITED
 
-${allCitationsWithUrls.map(c => `[${c.number}] ${c.url}`).join('\n')}
+${citedSources.map(c => `[${c.number}] ${c.url}`).join('\n')}
 `;
+
+  // Add unused sources if any exist
+  if (unusedSources.length > 0) {
+    sourcesAppendix += `
+
+## ADDITIONAL SOURCES CONSULTED
+
+${unusedSources.map(c => `[${c.number}] ${c.url}`).join('\n')}
+`;
+  }
 
   briefingText = briefingText + sourcesAppendix;
 
   return {
     briefing: briefingText,
-    allCitations: allCitationsWithUrls.map(c => c.url),  // Array of URLs
+    allCitations: citedSources.map(c => c.url),  // Array of CITED URLs only
+    citedSourceCount: citedSources.length,
+    collectedSourceCount: totalSources,
+    citationInstanceCount: citationMatches.length,
     researchCount: 12
   };
 }
@@ -330,24 +372,28 @@ export default async function handler(req, res) {
 
     // Validate output quality
     const wordCount = synthesis.briefing.split(/\s+/).length;
-    const citationCount = (synthesis.briefing.match(/\[\d+\]/g) || []).length;
     const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
 
     console.log('=== Briefing Generation Complete ===');
-    console.log(`Final briefing: ${wordCount} words, ${citationCount} citations`);
+    console.log(`Final briefing: ${wordCount} words`);
+    console.log(`Citation instances: ${synthesis.citationInstanceCount}`);
+    console.log(`Sources cited: ${synthesis.citedSourceCount}`);
+    console.log(`Sources collected: ${synthesis.collectedSourceCount}`);
     console.log(`Total time: ${totalTime}s`);
-    console.log(`Unique sources: ${allCitationsWithUrls.length}`);
     console.log(`Research queries: ${synthesis.researchCount}`);
 
     // Quality warnings
     if (wordCount < 5000) {
       console.warn('⚠️  Warning: Briefing shorter than expected');
     }
-    if (citationCount < 50) {
+    if (synthesis.citationInstanceCount < 50) {
       console.warn('⚠️  Warning: Low citation density');
     }
-    if (allCitationsWithUrls.length < 30) {
-      console.warn('⚠️  Warning: Insufficient source diversity');
+    if (synthesis.citedSourceCount < 20) {
+      console.warn('⚠️  Warning: Insufficient cited source diversity');
+    }
+    if (synthesis.collectedSourceCount < 30) {
+      console.warn('⚠️  Warning: Insufficient research source diversity');
     }
 
     // Add metadata header to briefing
@@ -365,7 +411,7 @@ export default async function handler(req, res) {
   timeZoneName: 'short'
 })}
 **Classification:** Strategic Intelligence – Senior Leadership
-**Sources Analyzed:** ${allCitationsWithUrls.length}
+**Sources Cited:** ${synthesis.citedSourceCount} | **Sources Researched:** ${synthesis.collectedSourceCount}
 **Research Depth:** ${synthesis.researchCount} comprehensive queries
 ---
 
@@ -374,20 +420,22 @@ ${synthesis.briefing}`;
     return res.status(200).json({
       ok: true,
       briefing: briefingWithMetadata,
-      citations: synthesis.allCitations,
+      citations: synthesis.allCitations,  // Array of cited URLs only
       startDate: startDate,
       endDate: endDate,
       generatedAt: new Date().toISOString(),
       metadata: {
         wordCount,
-        citationCount,
-        sourceCount: allCitationsWithUrls.length,  // Use the actual count
+        citationInstanceCount: synthesis.citationInstanceCount,
+        citedSourceCount: synthesis.citedSourceCount,
+        collectedSourceCount: synthesis.collectedSourceCount,
         researchQueriesUsed: synthesis.researchCount,
         generationTimeSeconds: parseFloat(totalTime),
         qualityChecks: {
           sufficientLength: wordCount >= 5000,
-          adequateCitations: citationCount >= 50,
-          diverseSources: allCitationsWithUrls.length >= 30
+          adequateCitations: synthesis.citationInstanceCount >= 50,
+          diverseCitedSources: synthesis.citedSourceCount >= 20,
+          diverseCollectedSources: synthesis.collectedSourceCount >= 30
         }
       }
     });

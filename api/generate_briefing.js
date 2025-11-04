@@ -57,22 +57,31 @@ Provide detailed analysis with extensive citations.`
   }
 
   const data = await response.json();
+  const content = data.choices?.[0]?.message?.content || '';
+
+  // Perplexity returns citations in multiple possible locations
+  const citations = data.citations ||
+                   data.choices?.[0]?.citations ||
+                   data.choices?.[0]?.message?.citations ||
+                   [];
+
+  // Extract URLs from content if inline citations exist
+  const urlMatches = content.match(/https?:\/\/[^\s\)]+/g) || [];
+  const allCitations = [...new Set([...citations, ...urlMatches])]; // Deduplicate
+
+  console.log(`Research "${query.substring(0, 50)}...": ${content.length} chars, ${allCitations.length} citations`);
+  if (allCitations.length > 0) {
+    console.log(`Sample citations:`, allCitations.slice(0, 2));
+  }
+
   return {
     query,
-    content: data.choices[0].message.content,
-    citations: data.citations || []
+    content,
+    citations: allCitations
   };
 }
 
-async function synthesizeBriefing(researchResults, dateRange, apiKey) {
-  // Combine all research with source tracking
-  const combinedResearch = researchResults
-    .filter(r => r.content && r.content.length > 100)
-    .map((r, i) =>
-      `### Research Area ${i + 1}: ${r.query}\n\n${r.content}\n\n**Sources for this section:** ${r.citations.map((c, idx) => `[${idx + 1}] ${c}`).join(', ')}`
-    ).join('\n\n---\n\n');
-
-  const allCitations = researchResults.flatMap(r => r.citations);
+async function synthesizeBriefing(combinedResearch, allCitationsWithUrls, totalSources, dateRange, apiKey) {
 
   const systemPrompt = `You are a senior policy analyst preparing a weekly national-security–style policy briefing for HSG, a global venture capital firm with significant exposure to the U.S., China, and global technology ecosystems.
 
@@ -135,7 +144,19 @@ CRITICAL: You have extensive research provided below. Use it comprehensively. Ev
 
   const userMessage = `Using the research conducted below, create a comprehensive weekly HSG national security policy briefing for ${dateRange.startDate} to ${dateRange.endDate}.
 
-RESEARCH CONDUCTED (${researchResults.length} topics, ${allCitations.length} sources):
+IMPORTANT CITATION INSTRUCTIONS:
+- You have ${totalSources} sources available (numbered [1] through [${totalSources}])
+- EVERY factual claim, policy detail, date, or statistic MUST include citations
+- Use citations like this: "Treasury finalized the rule[1][2]" or "effective January 2, 2025[3]"
+- Aim for 3-5 citations per paragraph
+- The more citations, the better
+
+MASTER SOURCE LIST (${totalSources} total):
+${allCitationsWithUrls.map(c => `[${c.number}] ${c.url}`).join('\n')}
+
+---
+
+RESEARCH CONDUCTED (12 topics):
 
 ${combinedResearch}
 
@@ -169,7 +190,16 @@ SYNTHESIS INSTRUCTIONS:
    - What do Trump administration signals mean for trajectory?
    - How do allied policies (EU, UK, Japan) create opportunities or risks?
 
-Target: 8,000-10,000 words with extensive citations throughout.`;
+Synthesize this into the required briefing format with:
+- Executive Summary (5 bullets, heavily cited)
+- Policy & Legislative Updates (4-6 entries)
+- National Security & Tech Policy (4-6 entries)
+- Outbound Investment & Foreign Investment Review (3-5 entries)
+- China Policy & Global Reactions (3-5 entries)
+- Analysis Section (500-800 words)
+
+Each entry: Headline, BLUF, Analysis (HSG Relevance) with 3-5 citations per paragraph.
+Target: 8,000-10,000 words total with EXTENSIVE citations throughout.`;
 
   const response = await fetch('https://api.perplexity.ai/chat/completions', {
     method: 'POST',
@@ -184,6 +214,7 @@ Target: 8,000-10,000 words with extensive citations throughout.`;
       top_p: 0.9,
       presence_penalty: 0,
       frequency_penalty: 1,
+      return_citations: false,  // We already have them from research stage
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userMessage }
@@ -197,10 +228,24 @@ Target: 8,000-10,000 words with extensive citations throughout.`;
   }
 
   const data = await response.json();
+  let briefingText = data.choices[0].message.content;
+
+  // Append sources list at the end
+  const sourcesAppendix = `
+
+---
+
+## SOURCES CITED
+
+${allCitationsWithUrls.map(c => `[${c.number}] ${c.url}`).join('\n')}
+`;
+
+  briefingText = briefingText + sourcesAppendix;
+
   return {
-    briefing: data.choices[0].message.content,
-    allCitations: allCitations,
-    researchCount: researchResults.length
+    briefing: briefingText,
+    allCitations: allCitationsWithUrls.map(c => c.url),  // Array of URLs
+    researchCount: 12
   };
 }
 
@@ -230,20 +275,53 @@ export default async function handler(req, res) {
 
     const researchResults = await Promise.all(researchPromises);
 
-    const totalSources = researchResults.reduce((sum, r) => sum + (r.citations?.length || 0), 0);
     const researchTime = ((Date.now() - startTime) / 1000).toFixed(1);
 
+    // Build a master citation list with URLs
+    let citationIndex = 1;
+    const masterCitationMap = new Map();
+    const allCitationsWithUrls = [];
+
+    console.log('=== Research Stage Complete ===');
+    researchResults.forEach((result, i) => {
+      console.log(`Query ${i + 1}: "${result.query.substring(0, 60)}..." - ${result.citations?.length || 0} sources`);
+      if (result.citations && result.citations.length > 0) {
+        result.citations.forEach((citation) => {
+          if (!masterCitationMap.has(citation)) {
+            masterCitationMap.set(citation, citationIndex);
+            allCitationsWithUrls.push({ number: citationIndex, url: citation });
+            citationIndex++;
+          }
+        });
+      }
+    });
+
+    const totalSources = allCitationsWithUrls.length;
+    console.log(`Total unique sources collected: ${totalSources}`);
     console.log(`Stage 1 Complete: ${totalSources} sources found in ${researchTime}s`);
-    console.log('Source breakdown:', researchResults.map(r =>
-      `${r.query.substring(0, 40)}...: ${r.citations?.length || 0} sources`
-    ));
+
+    // Format research with proper citation mapping
+    const combinedResearch = researchResults
+      .filter(r => r.content && r.content.length > 100)
+      .map((r, i) => {
+        const sourcesText = r.citations && r.citations.length > 0
+          ? r.citations.map(c => `[${masterCitationMap.get(c)}] ${c}`).join('\n')
+          : 'No sources found';
+
+        return `### Research Area ${i + 1}: ${r.query}\n\n${r.content}\n\n**Sources:**\n${sourcesText}`;
+      }).join('\n\n---\n\n');
+
+    console.log(`Preparing synthesis with ${totalSources} sources`);
 
     // Stage 2: Synthesize comprehensive briefing
-    console.log('Stage 2: Synthesizing comprehensive briefing...');
+    console.log('=== Starting Synthesis Stage ===');
+    console.log(`Master citation list has ${totalSources} sources`);
     const synthesisStart = Date.now();
 
     const synthesis = await synthesizeBriefing(
-      researchResults,
+      combinedResearch,
+      allCitationsWithUrls,
+      totalSources,
       { startDate, endDate },
       apiKey
     );
@@ -256,10 +334,9 @@ export default async function handler(req, res) {
     const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
 
     console.log('=== Briefing Generation Complete ===');
+    console.log(`Final briefing: ${wordCount} words, ${citationCount} citations`);
     console.log(`Total time: ${totalTime}s`);
-    console.log(`Word count: ${wordCount}`);
-    console.log(`Citations: ${citationCount}`);
-    console.log(`Unique sources: ${totalSources}`);
+    console.log(`Unique sources: ${allCitationsWithUrls.length}`);
     console.log(`Research queries: ${synthesis.researchCount}`);
 
     // Quality warnings
@@ -269,7 +346,7 @@ export default async function handler(req, res) {
     if (citationCount < 50) {
       console.warn('⚠️  Warning: Low citation density');
     }
-    if (totalSources < 30) {
+    if (allCitationsWithUrls.length < 30) {
       console.warn('⚠️  Warning: Insufficient source diversity');
     }
 
@@ -288,7 +365,7 @@ export default async function handler(req, res) {
   timeZoneName: 'short'
 })}
 **Classification:** Strategic Intelligence – Senior Leadership
-**Sources Analyzed:** ${totalSources}
+**Sources Analyzed:** ${allCitationsWithUrls.length}
 **Research Depth:** ${synthesis.researchCount} comprehensive queries
 ---
 
@@ -304,13 +381,13 @@ ${synthesis.briefing}`;
       metadata: {
         wordCount,
         citationCount,
-        sourceCount: totalSources,
+        sourceCount: allCitationsWithUrls.length,  // Use the actual count
         researchQueriesUsed: synthesis.researchCount,
         generationTimeSeconds: parseFloat(totalTime),
         qualityChecks: {
           sufficientLength: wordCount >= 5000,
           adequateCitations: citationCount >= 50,
-          diverseSources: totalSources >= 30
+          diverseSources: allCitationsWithUrls.length >= 30
         }
       }
     });

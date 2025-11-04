@@ -33,7 +33,6 @@ async function conductResearch(query, apiKey) {
       max_tokens: 4000,
       return_citations: true,
       search_recency_filter: 'month',
-      search_domain_filter: ['gov', 'edu', 'org'],
       messages: [{
         role: 'user',
         content: `Conduct comprehensive research on: ${query}

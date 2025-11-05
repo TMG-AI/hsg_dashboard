@@ -64,7 +64,7 @@ export default async function handler(req, res) {
             temperature: 0.2,
             max_tokens: 2500,
             return_citations: true,
-            search_recency_filter: 'week',
+            search_recency_filter: 'month',
             messages: [{
               role: 'user',
               content: `TODAY'S DATE: ${today}
@@ -99,9 +99,28 @@ IMPORTANT: Focus on news articles published between ${startDate} and ${endDate}.
 
           console.log(`Found ${citations.length} sources`);
 
-          // Log warning if content mentions wrong year
-          if (content.includes('2024') && !content.includes('2025')) {
-            console.warn(`⚠️  Warning: Query ${i+1} may have returned outdated results from 2024`);
+          // Date validation - check if response is actually about past 7 days
+          const hasNoUpdates = content.toLowerCase().includes('no material update');
+          const mentions2024 = (content.match(/2024/g) || []).length;
+          const mentions2025 = (content.match(/2025/g) || []).length;
+          const mentionsNovember = content.toLowerCase().includes('november');
+          const mentionsThisWeek = content.toLowerCase().includes('this week') ||
+                                   content.toLowerCase().includes('past week') ||
+                                   content.toLowerCase().includes('past 7 days');
+
+          console.log(`Query ${i+1} date validation: 2024 refs=${mentions2024}, 2025 refs=${mentions2025}, Nov=${mentionsNovember}, thisWeek=${mentionsThisWeek}, noUpdates=${hasNoUpdates}`);
+
+          // Warn if response seems to have outdated information
+          if (!hasNoUpdates && mentions2024 > mentions2025 * 2) {
+            console.warn(`⚠️  Query ${i+1}: Likely outdated - mentions 2024 ${mentions2024} times vs 2025 ${mentions2025} times`);
+          }
+
+          if (!hasNoUpdates && !mentionsNovember && !mentionsThisWeek && mentions2025 === 0) {
+            console.warn(`⚠️  Query ${i+1}: Missing recent date references - may not be from past 7 days`);
+          }
+
+          if (hasNoUpdates) {
+            console.log(`✓ Query ${i+1}: Correctly reported no material updates in past week`);
           }
 
           results.push({

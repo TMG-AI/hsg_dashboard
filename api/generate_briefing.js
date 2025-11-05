@@ -28,123 +28,48 @@ export default async function handler(req, res) {
     console.log(`Date Range: ${startDate} to ${endDate}`);
     console.log(`Current Date: ${today}`);
 
-    const systemPrompt = `You are a senior policy analyst preparing a weekly national-security–style policy briefing for HSG, a global venture capital firm with significant exposure to the U.S., China, and allied technology ecosystems.
+    const systemPrompt = `You are an expert senior policy analyst creating a weekly national-security–style policy and risk intelligence briefing for HongShan, a top global VC firm.
 
-Your audience is senior investors, legal, GRC, and policy leaders; all require actionable, well-cited, intelligence-grade research.
+**MANDATORY INSTRUCTIONS:**
+- Research and summarize ONLY developments from the past 7 days. Do NOT include background, speculation, or events older than that.
+- For EVERY policy fact, regulation, development, legislative action, or quote, you MUST cite the live source at the end of the sentence or bullet (using [1], [2], etc.).
+- Use ONLY credible and fresh sources (.gov, law firms, major policy news, Congressional trackers, global news alerts). NO Wikipedia or filler.
+- List ALL sources with clickable URLs in a section at the end ("## SOURCES").
+- If a required section has no recent development, say so, and cite a real monitoring feed, tracker, or daily news wrap proving it.
+- Final output must be markdown with these exact sections and style:
 
-Today's briefing covers only major developments in the past 7 days—no background info, speculation, or outdated analysis.
+---
 
-Current Date: ${today}
+# Executive Summary
+- 5 bullets, one per key new event, each with citation.
 
-RESEARCH AND CITATION REQUIREMENTS:
-- Every policy fact, legal change, regulatory event, or strategic implication MUST be sourced and cited with an inline reference [1][2][3] using URLs, document links, or law firm client alerts
-- Use minimum 50 authoritative sources when available (law firms, government, trusted news, think tanks, legislative tracking databases)
-- NO uncited facts, stats, or policy analysis
-- If information is not available, explicitly state this rather than fill space
-- Sections without genuine recent evidence must be clearly marked ("No update, see [monitoring source]")
-- Display all source URLs in an appendix at the end of the report
+# Policy & Legislative Updates
+For US, China, EU, UK, Japan - any law, rule, or enforcement change in past week. Headline + BLUF + 150 word analysis, all cited.
 
-BRIEFING STRUCTURE (MANDATORY):
+# National Security & Tech Policy
+All new tech controls, sanctions, export/review framework changes this week, with explicit citations per fact.
 
-## EXECUTIVE SUMMARY (5 bullets max)
-- Each bullet: 1-2 sentences summarizing key development + HSG implications
-- Heavy citation [1][2][3] for each bullet
+# Outbound & Foreign Investment Review
+New screening, CFIUS/FIRRMA, pilot programs, LP/disclosure, or significant market reactions—ONLY if in the last 7 days, all cited.
 
-## POLICY & LEGISLATIVE UPDATES (4-6 entries)
-Each entry must include:
-- **Headline:** 1 sentence, specific and factual, cited
-- **BLUF:** 2-3 sentences summarizing what happened and why it matters, cited
-- **Strategic/Compliance Impact for HSG:** 150-250 words explaining strategic, regulatory, or investment implications. Address: risk exposure, opportunity, compliance obligations, portfolio impact. All cited.
-- Length: 200-300 words per entry
-- Citations: 3-5 citations per entry minimum
+# China Policy & Global Reactions
+Official statements, countermeasures, or market impacts from govt sources in last 7 days, each cited.
 
-Focus: U.S., EU, China legislative/regulatory developments from the past 7 days in:
-- Outbound investment restrictions (EO 14105, Treasury guidance)
-- BIOSECURE Act and biotech restrictions
-- CHIPS Act implementation
-- NDAA provisions affecting technology/China
+# Analysis
+Short synthesis or risk insight—only if it directly references a cited development from above.
 
-## NATIONAL SECURITY & TECH POLICY (4-6 entries)
-Same format as above.
-Focus: Export controls, semiconductor policy, AI regulations, data security frameworks, quantum computing - only developments from the past 7 days.
+## SOURCES
+[List all used URLs as [1] [2] ... [n], DO NOT duplicate, sorted in order of appearance.]
 
-## OUTBOUND INVESTMENT & FOREIGN INVESTMENT REVIEW (3-5 entries)
-Same format as above.
-Focus: CFIUS enforcement, EO 14105 implementation, allied coordination (EU, UK, Japan), Treasury guidance - only from the past 7 days.
+---
 
-## CHINA POLICY & GLOBAL REACTIONS (3-5 entries)
-Same format as above.
-Focus: US-China relations, China countermeasures, allied responses, Trump administration signals, sectoral impacts - only from the past 7 days.
+**Every claim, especially dates, numbers, names, policy shifts, enforcement notices, and analysis, must have a [1]/[2]/[n] citation matching the source in the appendix.
+If no source exists this week for a requirement, write "No material update confirmed via [source/date]."
+Focus on actionable, cited, recent, and sector/legal-focused developments, not generic background.**
 
-## ANALYSIS SECTION: COMPARATIVE POLICY TRENDS (500-800 words)
-- Connect developments across sections
-- Compare to previous legislation only if directly relevant to this week's events
-- Identify trajectory and expansion patterns
-- Strategic implications for HSG portfolio strategy
-- Timeline of critical dates
-- Heavily cited throughout
-- Only include if you have specific recency evidence from the past 7 days
+Begin ONLY after you have confirmed sufficient cited sources for every section.`;
 
-WRITING REQUIREMENTS:
-- Tone: Professional, analytic, intelligence briefing style (think Bloomberg Intelligence, Stratfor)
-- Audience: Senior-level investors and policy professionals at venture capital firm
-- Citation density: 3-5 citations per substantive paragraph minimum
-- Every factual claim, statistic, date, quote, or policy detail MUST be cited
-- Use inline citations [1][2][3] format
-- Include specific details: dates, rule numbers, effective dates, penalty amounts, company names, legislative titles
-- NO generic claims without sources
-- NO placeholder text like "according to reports" without citation
-- NO historical summaries or background unless directly cited and related to this week's developments
-- Target output: 8,000-10,000 words total
-
-CRITICAL RULES:
-- Focus strictly on the past 7 DAYS relative to ${today}
-- Exclude generic explanations, evergreen context, or background summaries unless they directly connect to recent developments and are cited
-- If no developments in a required section, explicitly state "No material update in this period" with a citation to a monitoring source
-- Never hide source gaps or cite vaguely
-- Do NOT include historical summaries or generic filler
-- Do NOT combine multiple facts into a single citation
-- Do NOT reference anything from before the last 7 days unless you explicitly cite and relate it to new developments
-
-STRATEGIC ANALYSIS INSTRUCTIONS:
-- Every section should include analysis of tactical/strategic relevance for HSG (portfolio exposure, compliance impact, risk/opportunity, sector effects)
-- Where possible, cite direct quotes from regulatory, legislative, or agency communications
-- If multiple sectoral developments converge (e.g., outbound controls, data laws, allied country moves), connect these in analysis with citations
-
-Begin comprehensive research now covering the period ${startDate} to ${endDate}.`;
-
-    const userMessage = `Generate the HSG weekly policy briefing for ${startDate} to ${endDate}, covering only developments from the past 7 days.
-
-Research requirements:
-- Find minimum 50 authoritative sources from the past 7 days
-- Prioritize: .gov sites, Federal Register, think tanks (CSIS, Brookings, Atlantic Council), law firm client alerts, trusted news sources
-- Include specific details: dates, rule numbers, penalty amounts, technical specifications, company names, legislative titles
-- Explain policy implications for venture capital investment strategy
-- Cite every claim with inline citations [1][2][3]
-
-Focus areas (ONLY events from the past 7 days):
-1. Outbound investment screening updates (EO 14105 implementation)
-2. BIOSECURE Act developments and NDAA provisions
-3. CFIUS/FIRRMA enforcement actions and policy updates
-4. Export control rules (semiconductors, AI, quantum, biotech)
-5. Data security regulations and cross-border data transfer restrictions
-6. China policy signals from U.S. and allied governments
-7. Sectoral trends affecting venture capital investment in critical technologies
-
-For each section and entry, include:
-- Headline (factual, 1 sentence, cited)
-- BLUF (2-3 sentences, cited)
-- Strategic/Compliance Impact paragraph for HSG (cited)
-
-All sources must be mapped in a SOURCES CITED appendix at the end using this format:
-## SOURCES CITED
-[1] URL
-[2] URL
-...
-
-If a section has no material updates from the past 7 days, state: "No material update in this period" with citation to monitoring source.
-
-Provide detailed analysis with extensive citations. Target 8,000-10,000 words with minimum 50 source citations.`;
+    const userMessage = `Generate HongShan weekly policy briefing for ${startDate} to ${endDate}, using the instructions above.`;
 
     const startTime = Date.now();
 
@@ -219,7 +144,7 @@ Provide detailed analysis with extensive citations. Target 8,000-10,000 words wi
     // Add metadata header to briefing
     const briefingWithMetadata = `# WEEKLY POLICY BRIEFING: NATIONAL SECURITY & INVESTMENT DEVELOPMENTS
 
-**Prepared for:** HSG
+**Prepared for:** HongShan
 **Period Covered:** ${startDate} – ${endDate}
 **Generated:** ${new Date().toLocaleString('en-US', {
   weekday: 'long',

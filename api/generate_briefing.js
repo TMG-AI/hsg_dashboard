@@ -4,13 +4,17 @@ export const config = {
   maxDuration: 300, // 5 minutes
 };
 
-const FOCUSED_QUERIES = [
-  "US Treasury outbound investment restrictions EO 14105 China October November 2024",
-  "BIOSECURE Act WuXi BGI biotech Senate NDAA October November 2024",
-  "Commerce Department BIS semiconductor export controls TSMC China Entity List October November 2024",
-  "Trump administration China policy tariffs Marco Rubio Mike Waltz October November 2024",
-  "EU UK Japan China investment screening semiconductor policy October November 2024"
-];
+function generateQueries(startDate, endDate) {
+  const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+
+  return [
+    `US Treasury outbound investment restrictions EO 14105 China developments between ${startDate} and ${endDate} ${today}`,
+    `BIOSECURE Act WuXi BGI biotech Senate NDAA news between ${startDate} and ${endDate} ${today}`,
+    `Commerce Department BIS semiconductor export controls TSMC China Entity List news between ${startDate} and ${endDate} ${today}`,
+    `Trump administration China policy tariffs developments between ${startDate} and ${endDate} ${today}`,
+    `EU UK Japan China investment screening semiconductor policy news between ${startDate} and ${endDate} ${today}`
+  ];
+}
 
 const SECTION_TITLES = [
   'Outbound Investment & Treasury Guidance',
@@ -37,6 +41,9 @@ export default async function handler(req, res) {
     console.log(`Date Range: ${startDate} to ${endDate}`);
     console.log('Using 5-query focused approach');
 
+    const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+    const FOCUSED_QUERIES = generateQueries(startDate, endDate);
+
     const startTime = Date.now();
     const results = [];
 
@@ -57,20 +64,23 @@ export default async function handler(req, res) {
             temperature: 0.2,
             max_tokens: 2500,
             return_citations: true,
-            search_recency_filter: 'month',
+            search_recency_filter: 'week',
             messages: [{
               role: 'user',
-              content: `Research this topic: ${query}
+              content: `TODAY'S DATE: ${today}
 
-REQUIREMENTS:
-- Find 5-10 authoritative sources from .gov sites, law firms, think tanks, or major news outlets
-- Include specific details: dates, dollar amounts, company names, rule numbers, effective dates
-- Explain strategic implications for venture capital firms investing in China-related technology sectors
-- Format as: Headline, Key Developments (bullet points with specifics), Strategic Implications for HSG
-- Cite every fact with inline citations [1][2][3]
-- Focus on developments from October-November 2024
+Research this topic for developments in the PAST 7 DAYS ONLY (${startDate} to ${endDate}): ${query}
 
-Provide comprehensive analysis with full source citations.`
+CRITICAL REQUIREMENTS:
+- ONLY report on events, announcements, or developments from the past 7 days
+- Include the specific date for each development (e.g., "On November 1, 2025...")
+- If NO developments occurred in the past 7 days, explicitly state "No material updates in the past week"
+- Find 5-10 authoritative sources from .gov sites, law firms, think tanks, major news
+- Include specific details: dates, dollar amounts, company names, rule numbers
+- Explain strategic implications for venture capital firms
+- Cite every fact with [1][2][3]
+
+If there are no developments in the past 7 days for this topic, say so clearly with a source confirming no news.`
             }]
           })
         });
@@ -88,6 +98,11 @@ Provide comprehensive analysis with full source citations.`
           const citations = data.citations || [];
 
           console.log(`Found ${citations.length} sources`);
+
+          // Log warning if content mentions wrong year
+          if (content.includes('2024') && !content.includes('2025')) {
+            console.warn(`⚠️  Warning: Query ${i+1} may have returned outdated results from 2024`);
+          }
 
           results.push({
             content,

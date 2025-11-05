@@ -160,7 +160,6 @@ Provide detailed analysis with extensive citations. Target 8,000-10,000 words wi
         max_tokens: 12000,
         return_citations: true,
         search_recency_filter: 'week',
-        search_domain_filter: ['gov', 'edu', 'org', 'com'],
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userMessage }

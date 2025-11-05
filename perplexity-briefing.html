@@ -93,16 +93,16 @@
       </button>
       <p class="info-text">
         Click to generate a comprehensive weekly policy briefing covering the past 7 days.<br>
-        Perplexity AI will conduct multi-stage research across 12 policy areas, analyzing 50+ authoritative sources including .gov sites, think tanks, and policy research firms.<br>
-        <strong>Generation time: 2-5 minutes</strong>
+        Perplexity AI will research 50+ authoritative sources including .gov sites, think tanks, and policy research firms.<br>
+        <strong>Generation time: 1-3 minutes</strong>
       </p>
     </div>
 
     <!-- Loading State -->
     <div id="loading" class="loading">
       <div>
-        <div class="loading-text">🔍 Stage 1: Conducting parallel research across 12 policy areas...</div>
-        <div class="loading-subtext">This comprehensive briefing may take 2-5 minutes to generate</div>
+        <div class="loading-text">🔍 Generating comprehensive briefing with 50+ sources...</div>
+        <div class="loading-subtext">This may take 1-3 minutes to complete</div>
       </div>
     </div>
 
@@ -194,9 +194,9 @@
         // Display briefing with metadata
         const meta = data.metadata || {};
         document.getElementById('briefing-meta').innerHTML = `
-          <div>Coverage: ${data.startDate} – ${data.endDate}</div>
+          <div>Coverage: ${data.startDate} – ${data.endDate} (Past 7 Days)</div>
           <div>Generated: ${new Date(data.generatedAt).toLocaleString('en-US')}</div>
-          ${meta.wordCount ? `<div style="margin-top:8px">📊 ${meta.wordCount.toLocaleString()} words | ${meta.citationInstanceCount} citations | ${meta.citedSourceCount} sources cited | ${meta.collectedSourceCount} sources researched | ${meta.generationTimeSeconds}s</div>` : ''}
+          ${meta.wordCount ? `<div style="margin-top:8px">📊 ${meta.wordCount.toLocaleString()} words | ${meta.citationInstanceCount} citations | ${meta.citedSourceCount} sources | ${meta.generationTimeSeconds}s</div>` : ''}
         `;
 
         document.getElementById('briefing-content').innerHTML = marked.parse(currentBriefing);

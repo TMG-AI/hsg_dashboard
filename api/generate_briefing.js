@@ -64,6 +64,7 @@ export default async function handler(req, res) {
             temperature: 0.2,
             max_tokens: 2500,
             return_citations: true,
+            search_recency_filter: 'week',
             messages: [{
               role: 'user',
               content: `TODAY'S DATE: ${today}

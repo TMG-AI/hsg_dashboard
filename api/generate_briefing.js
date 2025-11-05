@@ -64,7 +64,6 @@ export default async function handler(req, res) {
             temperature: 0.2,
             max_tokens: 2500,
             return_citations: true,
-            search_recency_filter: 'week',
             messages: [{
               role: 'user',
               content: `TODAY'S DATE: ${today}
@@ -72,15 +71,15 @@ export default async function handler(req, res) {
 Research this topic for developments in the PAST 7 DAYS ONLY (${startDate} to ${endDate}): ${query}
 
 CRITICAL REQUIREMENTS:
-- ONLY report on events, announcements, or developments from the past 7 days
-- Include the specific date for each development (e.g., "On November 1, 2025...")
+- ONLY report on events, announcements, or developments from the past 7 days (${startDate} to ${endDate})
+- Search recent articles from: Reuters, Bloomberg, Financial Times, Wall Street Journal, CNBC, South China Morning Post, Axios, Semafor, Politico, law firm alerts (Akin Gump, Kelley Drye, etc.), think tanks (Brookings, CSIS, Atlantic Council)
+- Include the specific date for each development (e.g., "On November 5, 2025..." or "This week...")
+- Find 5-10 authoritative sources with inline citations [1][2][3] after every fact
+- Include specific details: dates, dollar amounts, company names, rule numbers, agency names
+- Explain strategic implications for venture capital firms investing in China-related sectors
 - If NO developments occurred in the past 7 days, explicitly state "No material updates in the past week"
-- Find 5-10 authoritative sources from .gov sites, law firms, think tanks, major news
-- Include specific details: dates, dollar amounts, company names, rule numbers
-- Explain strategic implications for venture capital firms
-- Cite every fact with [1][2][3]
 
-If there are no developments in the past 7 days for this topic, say so clearly with a source confirming no news.`
+IMPORTANT: Focus on news articles published between ${startDate} and ${endDate}. Do not include background or historical context unless directly related to a recent development.`
             }]
           })
         });
